@@ -1,0 +1,6 @@
+﻿src/components/ui/Button.tsx(1,10): error TS1484: 'ButtonHTMLAttributes' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/hooks/useAvailability.ts(3,1): error TS6133: 'Appointment' is declared but its value is never read.
+src/hooks/useAvailability.ts(4,76): error TS6133: 'isAfter' is declared but its value is never read.
+src/hooks/useProcedures.ts(3,26): error TS6196: 'Appointment' is declared but never used.
+src/pages/Dashboard.tsx(3,26): error TS6133: 'cn' is declared but its value is never read.
+src/pages/Login.tsx(5,22): error TS6133: 'Loader2' is declared but its value is never read.

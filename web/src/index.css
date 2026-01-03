@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #D4AF37;
+  --color-secondary: #4A5D43;
+  --font-sans: "Inter", sans-serif;
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-slate-50 text-slate-900 antialiased;
+  }
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Estilização do ícone de calendário/relógio nativo do navegador */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(72%) sepia(85%) saturate(382%) hue-rotate(352deg) brightness(101%) contrast(101%);
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  50% {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  100% {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.skeleton {
+  animation: skeleton-loading 1.5s infinite ease-in-out;
+  border-radius: 0.5rem;
+}
+
+@keyframes success-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4);
+  }
+
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 15px rgba(251, 191, 36, 0);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+  }
+}
+
+.success-animate {
+  animation: success-pulse 0.6s ease-out;
+}
