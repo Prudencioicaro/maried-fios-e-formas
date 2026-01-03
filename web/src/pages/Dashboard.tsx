@@ -1537,18 +1537,12 @@ export default function Dashboard() {
                                             WhatsApp
                                         </a>
                                         <button
-                                            onClick={() => setSelectedClient({ name: nextApp.client_name, phone: nextApp.client_phone })}
-                                            className="h-16 sm:h-20 bg-slate-800 text-white rounded-2xl sm:rounded-[2rem] font-black text-lg sm:text-xl uppercase tracking-widest flex items-center justify-center gap-3 border border-white/10 hover:bg-slate-700 active:scale-95 transition-all text-center px-4"
-                                        >
-                                            Histórico
-                                        </button>
-                                        <button
                                             onClick={() => {
                                                 updateStatus(nextApp, 'confirmed');
                                                 triggerConfetti();
                                                 if (hasMore) setFocusIndex(prev => prev + 1);
                                             }}
-                                            className="h-16 sm:h-20 sm:col-span-2 bg-amber-400 text-slate-900 rounded-2xl sm:rounded-[2rem] font-black text-lg sm:text-xl uppercase tracking-widest flex items-center justify-center gap-3 shadow-2xl shadow-amber-500/20 hover:scale-[1.02] active:scale-95 transition-all text-center px-4"
+                                            className="h-16 sm:h-20 bg-amber-400 text-slate-900 rounded-2xl sm:rounded-[2rem] font-black text-lg sm:text-xl uppercase tracking-widest flex items-center justify-center gap-3 shadow-2xl shadow-amber-500/20 hover:scale-[1.02] active:scale-95 transition-all text-center px-4"
                                         >
                                             Finalizar
                                         </button>
