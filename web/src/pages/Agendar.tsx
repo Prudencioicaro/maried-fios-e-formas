@@ -96,10 +96,10 @@ export default function Agendar() {
 
             const endTime = addMinutes(startTime, duration);
 
-            // 3. Construct message for WhatsApp - IMMEDIATE
-            // We'll use a local ID if possible, or just skip it for the link to ensure speed
+            // 3. Construct message for WhatsApp - IMMEDIATE & iPhone Safe
             const siteUrl = window.location.origin;
-            const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}`;
+            const manageLink = `${siteUrl}/admin?view=requests`;
+            const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}\n\nGerenciar solicitações: ${manageLink}`;
             const url = `https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`;
 
             // Automatic redirection - IMMEDIATE for iPhone compatibility

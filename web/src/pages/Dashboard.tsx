@@ -176,10 +176,12 @@ export default function Dashboard() {
     useEffect(() => {
         loadData();
 
-        // Detect 'confirm' parameter from URL
+        // Detect 'confirm' or 'view' parameter from URL
         const params = new URLSearchParams(window.location.search);
         const confirmId = params.get('confirm');
-        if (confirmId) {
+        const viewParam = params.get('view');
+
+        if (confirmId || viewParam === 'requests') {
             setView('requests');
             setDateFilter('all');
         }
