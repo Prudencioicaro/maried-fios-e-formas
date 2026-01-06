@@ -111,7 +111,7 @@ export default function Agendar() {
 
             // 3. Construct message for WhatsApp
             const siteUrl = window.location.origin;
-            const manageLink = `${siteUrl}/dashboard?confirm=${data.id}`;
+            const manageLink = `${siteUrl}/admin?confirm=${data.id}`;
 
             const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}\n\nLink para voce gerenciar: ${manageLink}`;
 
