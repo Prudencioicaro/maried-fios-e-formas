@@ -52,6 +52,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; border: string; text: string
     'Botox': { bg: 'bg-emerald-500/20', border: 'border-emerald-400', text: 'text-emerald-400' },
     'Selagem': { bg: 'bg-pink-500/20', border: 'border-pink-400', text: 'text-pink-400' },
     'Penteado': { bg: 'bg-orange-500/20', border: 'border-orange-400', text: 'text-orange-400' },
+    'Escova': { bg: 'bg-sky-500/20', border: 'border-sky-400', text: 'text-sky-400' },
 };
 
 const getCategoryColor = (category?: string) => {

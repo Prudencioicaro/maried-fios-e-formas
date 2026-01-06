@@ -63,6 +63,15 @@ const CATEGORIES = [
         minPrice: 70,
         image: 'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=800&q=80',
         gradient: 'from-pink-500/20 to-transparent'
+    },
+    {
+        id: 'escova',
+        name: 'Escova',
+        description: 'Escovas modeladas para todos os comprimentos',
+        category: 'Escova',
+        minPrice: 60,
+        image: 'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=800&q=80',
+        gradient: 'from-sky-500/20 to-transparent'
     }
 ];
 
