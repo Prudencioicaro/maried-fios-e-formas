@@ -17,7 +17,7 @@ export function useProcedures(category_raw: string) {
                 const { data, error } = await supabase
                     .from('procedures')
                     .select('*')
-                    .eq('category', category) // O Supabase não suporta ILIKE aqui direto sem text search configs as vezes, mas eq deve funcionar se o case bater. Se não, fitlramos no client ou usamos ilike. Teste inicial com eq.
+                    .ilike('category', category)
                     .order('price', { ascending: true });
 
                 if (error) throw error;
@@ -31,6 +31,8 @@ export function useProcedures(category_raw: string) {
 
         if (category) {
             load();
+        } else {
+            setLoading(false);
         }
     }, [category]);
 

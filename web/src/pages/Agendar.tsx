@@ -23,15 +23,16 @@ const CATEGORY_MAP: Record<string, string> = {
     'mechas': 'Mechas',
     'botox': 'Botox',
     'selagem': 'Selagem',
-    'penteados': 'Penteado'
+    'penteados': 'Penteado',
+    'penteado': 'Penteado'
 };
 
 export default function Agendar() {
     const { category: categorySlug } = useParams<{ category: string }>();
     const navigate = useNavigate();
 
-    // Convert URL slug to database category name
-    const dbCategory = categorySlug ? CATEGORY_MAP[categorySlug] : undefined;
+    // Convert URL slug to database category name, fallback to slug if not in map
+    const dbCategory = categorySlug ? (CATEGORY_MAP[categorySlug] || categorySlug.charAt(0).toUpperCase() + categorySlug.slice(1)) : undefined;
     const categoryName = dbCategory || 'Serviços';
 
     const { procedures, loading: loadingProcedures } = useProcedures(dbCategory || '');
