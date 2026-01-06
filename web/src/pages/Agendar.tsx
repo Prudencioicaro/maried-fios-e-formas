@@ -43,6 +43,7 @@ export default function Agendar() {
     const [clientPhone, setClientPhone] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [confirmationUrl, setConfirmationUrl] = useState('');
 
     // Refs for auto-scroll
     const agendaRef = useRef<HTMLDivElement>(null);
@@ -114,8 +115,11 @@ export default function Agendar() {
 
             const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}\n\nLink para voce gerenciar: ${manageLink}`;
 
+            const url = `https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`;
+            setConfirmationUrl(url);
+
             // Open WhatsApp in new tab
-            window.open(`https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`, '_blank');
+            window.open(url, '_blank');
 
             // Show success state
             setIsSuccess(true);
@@ -397,14 +401,26 @@ export default function Agendar() {
                                     Agendamento Pré-Confirmado!
                                 </h2>
                                 <p className="text-slate-300 text-lg mb-8 max-w-lg mx-auto">
-                                    Finalize a conversa no WhatsApp que abrimos para garantir seu horário com a Maried.
+                                    O seu agendamento foi registrado! Agora você deve clicar no botão abaixo para avisar a Maried no WhatsApp e garantir sua vaga.
                                 </p>
-                                <Button
-                                    onClick={() => navigate('/')}
-                                    className="px-8 h-14 rounded-xl bg-slate-800 text-white font-black uppercase tracking-wider hover:bg-slate-700 transition-all border border-slate-700"
-                                >
-                                    Voltar ao Início
-                                </Button>
+
+                                <div className="flex flex-col gap-3">
+                                    <Button
+                                        onClick={() => window.open(confirmationUrl, '_blank')}
+                                        className="w-full h-16 rounded-2xl bg-emerald-500 text-white font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3"
+                                    >
+                                        <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WA" className="w-6 h-6 invert" />
+                                        Abrir WhatsApp Agora
+                                    </Button>
+
+                                    <Button
+                                        onClick={() => navigate('/')}
+                                        variant="outline"
+                                        className="w-full h-14 rounded-2xl border-slate-700 text-slate-400 font-bold uppercase tracking-wider hover:bg-slate-800"
+                                    >
+                                        Voltar ao Início
+                                    </Button>
+                                </div>
                             </div>
                         ) : (
                             <>
