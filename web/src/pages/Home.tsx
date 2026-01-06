@@ -354,7 +354,7 @@ export default function Home() {
                             </h3>
                             <div className="flex items-center justify-center md:justify-end gap-4">
                                 <a
-                                    href="https://instagram.com/mariedfiosformas"
+                                    href="https://www.instagram.com/marihairoficial?igsh=dnJnY3dhdXRrNWp6"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center hover:scale-110 transition-transform shadow-lg"

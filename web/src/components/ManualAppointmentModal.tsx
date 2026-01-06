@@ -9,16 +9,18 @@ import { cn } from '../lib/utils';
 interface Props {
     onClose: () => void;
     onSuccess: () => void;
+    initialDate?: string; // format: 'yyyy-MM-dd'
+    initialTime?: string; // format: 'HH:mm'
 }
 
-export function ManualAppointmentModal({ onClose, onSuccess }: Props) {
+export function ManualAppointmentModal({ onClose, onSuccess, initialDate, initialTime }: Props) {
     const [procedures, setProcedures] = useState<Procedure[]>([]);
 
     const [clientName, setClientName] = useState('');
     const [clientPhone, setClientPhone] = useState('');
     const [selectedProcedureId, setSelectedProcedureId] = useState('');
-    const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-    const [time, setTime] = useState(format(new Date(), 'HH:mm'));
+    const [date, setDate] = useState(initialDate || format(new Date(), 'yyyy-MM-dd'));
+    const [time, setTime] = useState(initialTime || format(new Date(), 'HH:mm'));
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {

@@ -42,13 +42,15 @@ export default function Agendar() {
     const [clientName, setClientName] = useState('');
     const [clientPhone, setClientPhone] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSuccess, setIsSuccess] = useState(false);
 
     // Refs for auto-scroll
     const agendaRef = useRef<HTMLDivElement>(null);
     const identificationRef = useRef<HTMLElement>(null);
+    const timeSlotsRef = useRef<HTMLDivElement>(null);
 
     const duration = selectedProcedure?.duration_minutes || 0;
-    const { availableSlots, loading: loadingSlots } = useAvailability(selectedDate, duration);
+    const { availableSlots, loading: loadingSlots, unavailableReason } = useAvailability(selectedDate, duration);
 
     // Handle procedure selection with auto-scroll
     const handleProcedureSelect = (proc: Procedure) => {
@@ -112,7 +114,12 @@ export default function Agendar() {
 
             const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}\n\nLink para voce gerenciar: ${manageLink}`;
 
-            window.location.href = `https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`;
+            // Open WhatsApp in new tab
+            window.open(`https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`, '_blank');
+
+            // Show success state
+            setIsSuccess(true);
+            setIsSubmitting(false);
 
         } catch (err) {
             alert('Erro ao agendar. Tente novamente.');
@@ -299,11 +306,22 @@ export default function Agendar() {
                         </h2>
 
                         <div className="mb-8">
-                            <DateSelector selectedDate={selectedDate} onSelect={setSelectedDate} />
+                            <DateSelector selectedDate={selectedDate} onSelect={(date) => {
+                                setSelectedDate(date);
+                                setSelectedTime(null);
+                                // Auto-scroll to time slots
+                                setTimeout(() => {
+                                    if (timeSlotsRef.current) {
+                                        const yOffset = -20;
+                                        const y = timeSlotsRef.current.getBoundingClientRect().top + window.pageYOffset + yOffset;
+                                        window.scrollTo({ top: y, behavior: 'smooth' });
+                                    }
+                                }, 150);
+                            }} />
                         </div>
 
                         {selectedDate && (
-                            <div className="space-y-6 animate-in fade-in zoom-in-50 duration-300">
+                            <div ref={timeSlotsRef} className="space-y-6 animate-in fade-in zoom-in-50 duration-300">
                                 <div className="grid grid-cols-3 gap-3">
                                     {loadingSlots ? (
                                         <div className="col-span-3 py-12 text-center text-slate-400 flex flex-col items-center gap-3">
@@ -324,8 +342,23 @@ export default function Agendar() {
                                             </button>
                                         ))
                                     ) : (
-                                        <div className="col-span-3 py-8 text-center text-amber-300 bg-slate-900 rounded-2xl text-sm font-medium border border-amber-300/30 uppercase tracking-wider">
-                                            Agenda lotada para este dia
+                                        <div className="col-span-3 py-8 text-center bg-slate-900 rounded-2xl text-sm font-medium border uppercase tracking-wider">
+                                            {unavailableReason === 'blocked' ? (
+                                                <>
+                                                    <span className="text-red-400">🚫 Agenda Fechada</span>
+                                                    <p className="text-slate-500 text-xs mt-2 normal-case">Este dia está bloqueado para atendimento</p>
+                                                </>
+                                            ) : unavailableReason === 'closed' ? (
+                                                <>
+                                                    <span className="text-slate-400">Não atendemos neste dia</span>
+                                                    <p className="text-slate-500 text-xs mt-2 normal-case">Atendimento de terça a sábado</p>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span className="text-amber-300">Agenda Lotada</span>
+                                                    <p className="text-slate-500 text-xs mt-2 normal-case">Todos os horários já estão ocupados</p>
+                                                </>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -352,61 +385,83 @@ export default function Agendar() {
                     </section>
                 )}
 
-                {/* 5. IDENTIFICAÇÃO - Aparece após selecionar horário */}
+                {/* 5. IDENTIFICAÇÃO ou SUCESSO */}
                 {selectedTime && (
                     <section ref={identificationRef} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <h2 className="text-2xl font-black text-white mb-6 uppercase tracking-tight">
-                            Seus Dados
-                        </h2>
-
-                        <div className="space-y-5">
-                            <div>
-                                <label className="block text-sm font-black text-amber-300 uppercase tracking-wider mb-3">
-                                    Nome Completo
-                                </label>
-                                <input
-                                    type="text"
-                                    className="w-full h-14 px-6 rounded-xl bg-slate-900 border border-slate-700 focus:border-amber-300 focus:ring-0 text-base font-medium text-white placeholder:text-slate-500 transition-all"
-                                    placeholder="Digite seu nome"
-                                    value={clientName}
-                                    onChange={(e) => setClientName(e.target.value)}
-                                />
+                        {isSuccess ? (
+                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-8 text-center">
+                                <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-500/20">
+                                    <Check size={40} className="text-white" />
+                                </div>
+                                <h2 className="text-3xl font-black text-white mb-4 uppercase tracking-tight">
+                                    Agendamento Pré-Confirmado!
+                                </h2>
+                                <p className="text-slate-300 text-lg mb-8 max-w-lg mx-auto">
+                                    Finalize a conversa no WhatsApp que abrimos para garantir seu horário com a Maried.
+                                </p>
+                                <Button
+                                    onClick={() => navigate('/')}
+                                    className="px-8 h-14 rounded-xl bg-slate-800 text-white font-black uppercase tracking-wider hover:bg-slate-700 transition-all border border-slate-700"
+                                >
+                                    Voltar ao Início
+                                </Button>
                             </div>
+                        ) : (
+                            <>
+                                <h2 className="text-2xl font-black text-white mb-6 uppercase tracking-tight">
+                                    Seus Dados
+                                </h2>
 
-                            <div>
-                                <label className="block text-sm font-black text-amber-300 uppercase tracking-wider mb-3">
-                                    WhatsApp
-                                </label>
-                                <input
-                                    type="tel"
-                                    className="w-full h-14 px-6 rounded-xl bg-slate-900 border border-slate-700 focus:border-amber-300 focus:ring-0 text-base font-medium text-white placeholder:text-slate-500 transition-all"
-                                    placeholder="(00) 00000-0000"
-                                    value={clientPhone}
-                                    onChange={(e) => setClientPhone(e.target.value)}
-                                />
-                            </div>
+                                <div className="space-y-5">
+                                    <div>
+                                        <label className="block text-sm font-black text-amber-300 uppercase tracking-wider mb-3">
+                                            Nome Completo
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="w-full h-14 px-6 rounded-xl bg-slate-900 border border-slate-700 focus:border-amber-300 focus:ring-0 text-base font-medium text-white placeholder:text-slate-500 transition-all"
+                                            placeholder="Digite seu nome"
+                                            value={clientName}
+                                            onChange={(e) => setClientName(e.target.value)}
+                                        />
+                                    </div>
 
-                            {/* CTA Final */}
-                            <Button
-                                size="lg"
-                                onClick={handleConfirm}
-                                disabled={!clientName || !clientPhone || isSubmitting}
-                                className="w-full h-16 mt-6 text-lg font-black rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-slate-900 shadow-xl shadow-amber-500/30 border-none transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider"
-                            >
-                                {isSubmitting ? (
-                                    <>
-                                        <Loader2 className="animate-spin mr-2" size={20} />
-                                        Processando...
-                                    </>
-                                ) : (
-                                    'Confirmar Agendamento'
-                                )}
-                            </Button>
+                                    <div>
+                                        <label className="block text-sm font-black text-amber-300 uppercase tracking-wider mb-3">
+                                            WhatsApp
+                                        </label>
+                                        <input
+                                            type="tel"
+                                            className="w-full h-14 px-6 rounded-xl bg-slate-900 border border-slate-700 focus:border-amber-300 focus:ring-0 text-base font-medium text-white placeholder:text-slate-500 transition-all"
+                                            placeholder="(00) 00000-0000"
+                                            value={clientPhone}
+                                            onChange={(e) => setClientPhone(e.target.value)}
+                                        />
+                                    </div>
 
-                            <p className="text-center text-xs text-slate-500 mt-4 uppercase tracking-wider">
-                                Pagamento no local após o atendimento
-                            </p>
-                        </div>
+                                    {/* CTA Final */}
+                                    <Button
+                                        size="lg"
+                                        onClick={handleConfirm}
+                                        disabled={!clientName || !clientPhone || isSubmitting}
+                                        className="w-full h-16 mt-6 text-lg font-black rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-slate-900 shadow-xl shadow-amber-500/30 border-none transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="animate-spin mr-2" size={20} />
+                                                Processando...
+                                            </>
+                                        ) : (
+                                            'Confirmar Agendamento'
+                                        )}
+                                    </Button>
+
+                                    <p className="text-center text-xs text-slate-500 mt-4 uppercase tracking-wider">
+                                        Pagamento no local após o atendimento
+                                    </p>
+                                </div>
+                            </>
+                        )}
                     </section>
                 )}
             </div>

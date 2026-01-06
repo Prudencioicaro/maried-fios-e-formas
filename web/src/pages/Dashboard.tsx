@@ -4,8 +4,8 @@ import { formatCurrency, cn } from '../lib/utils';
 import { Button } from '../components/ui/Button';
 import {
     Check, X, Calendar, DollarSign, Users,
-    PieChart as PieChartIcon, Clock, LogOut, ChevronRight, Sparkles, Loader2,
-    Search, Inbox, Plus, Trash2, Edit3, ChevronLeft, Trash, Settings, Zap
+    PieChart as PieChartIcon, Clock, LogOut, ChevronRight, Sparkles,
+    Search, Inbox, Trash2, Edit3, ChevronLeft, Trash, Settings, Zap
 } from 'lucide-react';
 import {
     ResponsiveContainer, Tooltip,
@@ -44,12 +44,27 @@ const sendWhatsAppConfirmation = (phone: string, name: string, procedure: string
     window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
 };
 
+// Color mapping by procedure category
+const CATEGORY_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+    'Corte e Tratamentos': { bg: 'bg-blue-500/20', border: 'border-blue-400', text: 'text-blue-400' },
+    'Coloração': { bg: 'bg-purple-500/20', border: 'border-purple-400', text: 'text-purple-400' },
+    'Mechas': { bg: 'bg-amber-500/20', border: 'border-amber-400', text: 'text-amber-400' },
+    'Botox': { bg: 'bg-emerald-500/20', border: 'border-emerald-400', text: 'text-emerald-400' },
+    'Selagem': { bg: 'bg-pink-500/20', border: 'border-pink-400', text: 'text-pink-400' },
+    'Penteado': { bg: 'bg-orange-500/20', border: 'border-orange-400', text: 'text-orange-400' },
+};
+
+const getCategoryColor = (category?: string) => {
+    if (!category) return { bg: 'bg-slate-500/20', border: 'border-slate-400', text: 'text-slate-400' };
+    return CATEGORY_COLORS[category] || { bg: 'bg-amber-500/20', border: 'border-amber-400', text: 'text-amber-400' };
+};
+
 export default function Dashboard() {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [showManualModal, setShowManualModal] = useState(false);
     const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
-    const [view, setView] = useState<'stats' | 'agenda' | 'requests' | 'procedures' | 'settings'>('stats');
+    const [view, setView] = useState<'stats' | 'agenda' | 'requests' | 'procedures' | 'settings' | 'finances'>('agenda');
     const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
     const [customDate, setCustomDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [searchTerm, setSearchTerm] = useState('');
@@ -63,6 +78,7 @@ export default function Dashboard() {
     const [focusIndex, setFocusIndex] = useState(0);
     const [pickerMonth, setPickerMonth] = useState(new Date());
     const [agendaDate, setAgendaDate] = useState(new Date());
+    const [selectedSlotForNew, setSelectedSlotForNew] = useState<{ date: string; time: string } | null>(null);
     const [stats, setStats] = useState({
         totalEarnings: 0,
         totalCount: 0,
@@ -79,20 +95,29 @@ export default function Dashboard() {
                 .order('start_time', { ascending: false });
 
             // Apply Date Filters
-            const now = new Date();
+            // Base date for filters depends on view context
+            const baseDate = view === 'agenda' ? agendaDate : new Date();
+
             if (dateFilter === 'today') {
-                query = query.gte('start_time', startOfDay(now).toISOString())
-                    .lte('start_time', endOfDay(now).toISOString());
+                query = query.gte('start_time', startOfDay(baseDate).toISOString())
+                    .lte('start_time', endOfDay(baseDate).toISOString());
             } else if (dateFilter === 'week') {
-                query = query.gte('start_time', startOfWeek(now, { weekStartsOn: 0 }).toISOString())
-                    .lte('start_time', endOfWeek(now, { weekStartsOn: 0 }).toISOString());
+                query = query.gte('start_time', startOfWeek(baseDate, { weekStartsOn: 0 }).toISOString())
+                    .lte('start_time', endOfWeek(baseDate, { weekStartsOn: 0 }).toISOString());
             } else if (dateFilter === 'month') {
-                query = query.gte('start_time', startOfMonth(now).toISOString())
-                    .lte('start_time', endOfMonth(now).toISOString());
+                query = query.gte('start_time', startOfMonth(baseDate).toISOString())
+                    .lte('start_time', endOfMonth(baseDate).toISOString());
             } else if (dateFilter === 'custom' && customDate) {
-                const picked = parseISO(customDate);
-                query = query.gte('start_time', startOfDay(picked).toISOString())
-                    .lte('start_time', endOfDay(picked).toISOString());
+                // Check if it's a month selection (YYYY-MM) or day selection (YYYY-MM-DD)
+                if (customDate.length === 7) {
+                    const monthDate = parseISO(`${customDate}-01`);
+                    query = query.gte('start_time', startOfMonth(monthDate).toISOString())
+                        .lte('start_time', endOfMonth(monthDate).toISOString());
+                } else {
+                    const picked = parseISO(customDate);
+                    query = query.gte('start_time', startOfDay(picked).toISOString())
+                        .lte('start_time', endOfDay(picked).toISOString());
+                }
             }
 
             const { data, error } = await query;
@@ -156,7 +181,7 @@ export default function Dashboard() {
         const confirmId = params.get('confirm');
         if (confirmId) {
             setView('requests');
-            // We could also highlight it or auto-scroll
+            setDateFilter('all');
         }
 
         // Realtime subscription
@@ -169,10 +194,15 @@ export default function Dashboard() {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [dateFilter, customDate]);
+    }, [dateFilter, customDate, agendaDate, view]);
 
     const filteredAppointments = appointments.filter(app =>
         app.client_name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const filteredProcedures = procedures.filter(proc =>
+        proc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        proc.category?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const updateStatus = async (appointment: Appointment, status: Appointment['status']) => {
@@ -195,20 +225,29 @@ export default function Dashboard() {
         }
     };
 
-    const handleAdjust = async (appointment: Appointment, newStartTime: string) => {
+    const handleAdjust = async (appointment: Appointment, newStartTime: string, newProcedureId?: string) => {
         try {
-            const procedure = appointment.procedure;
+            // If a new procedure is selected, get its duration, otherwise use the current one
+            const newProcedure = newProcedureId ? procedures.find(p => p.id === newProcedureId) : null;
+            const procedure = newProcedure || appointment.procedure;
             const duration = procedure?.duration_minutes || 30;
             const start = new Date(newStartTime);
             const end = new Date(start.getTime() + duration * 60000);
 
+            const updateData: any = {
+                start_time: start.toISOString(),
+                end_time: end.toISOString(),
+                status: 'confirmed'
+            };
+
+            // Only update procedure_id if a new one was selected
+            if (newProcedureId && newProcedureId !== appointment.procedure_id) {
+                updateData.procedure_id = newProcedureId;
+            }
+
             const { error } = await supabase
                 .from('appointments')
-                .update({
-                    start_time: start.toISOString(),
-                    end_time: end.toISOString(),
-                    status: 'confirmed'
-                })
+                .update(updateData)
                 .eq('id', appointment.id);
 
             if (error) throw error;
@@ -261,11 +300,18 @@ export default function Dashboard() {
 
     const handleSaveBlockage = async (formData: any) => {
         try {
-            const { error } = await supabase.from('blocked_slots').insert(formData);
-            if (error) throw error;
+            console.log('Saving blockage:', formData);
+            const { data, error } = await supabase.from('blocked_slots').insert(formData).select();
+            if (error) {
+                console.error('Blockage error:', error);
+                throw error;
+            }
+            console.log('Blockage saved:', data);
+            triggerConfetti();
             loadData();
-        } catch (err) {
-            alert('Erro ao salvar bloqueio. Verifique se a tabela blocked_slots existe.');
+        } catch (err: any) {
+            console.error('Full error:', err);
+            alert(`Erro ao salvar bloqueio: ${err?.message || 'Verifique se a tabela blocked_slots existe.'}`);
         }
     };
 
@@ -279,7 +325,7 @@ export default function Dashboard() {
         }
     };
 
-    const groupedProcedures = procedures.reduce((acc, curr) => {
+    const groupedProcedures = filteredProcedures.reduce((acc, curr) => {
         const cat = curr.category || 'Outros';
         if (!acc[cat]) acc[cat] = [];
         acc[cat].push(curr);
@@ -343,7 +389,7 @@ export default function Dashboard() {
                             <Calendar size={20} className="text-amber-400 group-active:scale-95 transition-transform" /> Agenda
                         </button>
                         <button
-                            onClick={() => setView('requests')}
+                            onClick={() => { setView('requests'); setDateFilter('all'); }}
                             className={cn(
                                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all relative",
                                 view === 'requests' ? "bg-amber-400 text-slate-900 shadow-lg shadow-amber-500/20" : "text-slate-400 hover:bg-slate-800 hover:text-white"
@@ -358,6 +404,15 @@ export default function Dashboard() {
                                     {appointments.filter(a => a.status === 'pending').length}
                                 </span>
                             )}
+                        </button>
+                        <button
+                            onClick={() => setView('finances')}
+                            className={cn(
+                                "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all",
+                                view === 'finances' ? "bg-amber-400 text-slate-900 shadow-lg shadow-amber-500/20" : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                            )}
+                        >
+                            <DollarSign size={20} className={view === 'finances' ? "" : "text-amber-400/80"} /> Finanças
                         </button>
                         <button
                             onClick={() => setView('procedures')}
@@ -396,11 +451,12 @@ export default function Dashboard() {
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="flex justify-between items-center w-full sm:w-auto">
                             <h2 className="text-4xl font-black text-white tracking-tight leading-tight">
-                                {view === 'stats' ? 'Olá, Maried! 👋' :
+                                {view === 'stats' ? 'Dashboard 📊' :
                                     view === 'agenda' ? 'Sua Agenda 📅' :
                                         view === 'requests' ? 'Novas Solicitações 📥' :
                                             view === 'procedures' ? 'Catálogo de Serviços ✨' :
-                                                'Bloqueios de Agenda 🔒'}
+                                                view === 'finances' ? 'Relatório Financeiro 💰' :
+                                                    'Bloqueios de Agenda 🔒'}
                             </h2>
                             <button
                                 onClick={handleLogout}
@@ -410,12 +466,15 @@ export default function Dashboard() {
                             </button>
                         </div>
                         <div className="flex flex-col gap-3 w-full lg:w-auto lg:flex-row items-center">
-                            <Button
-                                onClick={() => setShowFocusMode(true)}
-                                className="h-12 lg:h-14 w-full lg:w-auto px-6 rounded-xl lg:rounded-2xl bg-slate-800 hover:bg-slate-700 text-white shadow-xl shadow-slate-900/20 text-sm lg:text-lg font-bold border border-white/5 transition-all hover:scale-105 flex items-center justify-center gap-2"
-                            >
-                                <Zap size={18} className="text-amber-400 fill-amber-400" /> Modo Atendimento
-                            </Button>
+                            <div className="flex flex-col items-center">
+                                <Button
+                                    onClick={() => setShowFocusMode(true)}
+                                    className="h-12 lg:h-14 w-full lg:w-auto px-6 rounded-xl lg:rounded-2xl bg-slate-800 hover:bg-slate-700 text-white shadow-xl shadow-slate-900/20 text-sm lg:text-lg font-bold border border-white/5 transition-all hover:scale-105 flex items-center justify-center gap-2"
+                                >
+                                    <Zap size={18} className="text-amber-400 fill-amber-400" /> Modo Foco
+                                </Button>
+                                <span className="text-[9px] text-slate-500 uppercase tracking-widest mt-1 hidden lg:block">Visualização Simplificada</span>
+                            </div>
                             <Button
                                 onClick={() => setShowManualModal(true)}
                                 className="h-12 lg:h-14 w-full lg:w-auto px-8 rounded-xl lg:rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-slate-900 shadow-xl shadow-amber-500/20 text-sm lg:text-lg font-bold border-none transition-all hover:scale-105"
@@ -425,57 +484,59 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col lg:flex-row gap-4 items-center bg-slate-900/50 backdrop-blur-xl p-3 rounded-[2rem] border border-slate-800 shadow-sm relative z-10">
-                        {/* Search Bar */}
-                        <div className="relative flex-1 group w-full">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-amber-400 transition-colors" size={20} />
-                            <input
-                                type="text"
-                                placeholder="Buscar por cliente..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="h-12 pl-12 pr-6 rounded-2xl bg-slate-950/50 border border-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400/20 w-full text-slate-200 font-medium placeholder:text-slate-600"
-                            />
-                        </div>
-
-                        {/* Divider for Desktop */}
-                        <div className="hidden lg:block w-px h-8 bg-slate-800"></div>
-
-                        {/* Date Filters Switcher */}
-                        <div className="flex items-center gap-1 p-1 bg-slate-950/50 rounded-2xl w-full lg:w-auto overflow-x-auto border border-slate-800">
-                            {[
-                                { id: 'all', label: 'Tudo' },
-                                { id: 'today', label: 'Hoje' },
-                                { id: 'week', label: 'Semana' },
-                                { id: 'month', label: 'Mês' },
-                                { id: 'custom', label: 'Calendário' }
-                            ].map((f) => (
-                                <button
-                                    key={f.id}
-                                    onClick={() => setDateFilter(f.id as any)}
-                                    className={cn(
-                                        "px-5 h-10 rounded-xl text-sm font-bold transition-all whitespace-nowrap",
-                                        dateFilter === f.id
-                                            ? "bg-amber-400 text-slate-900 shadow-sm"
-                                            : "text-slate-500 hover:text-slate-300"
-                                    )}
-                                >
-                                    {f.label}
-                                </button>
-                            ))}
-                        </div>
-
-                        {dateFilter === 'custom' && (
-                            <div className="relative w-full lg:w-auto animate-in fade-in slide-in-from-right-2">
+                    {view !== 'finances' && view !== 'agenda' && (
+                        <div className="flex flex-col lg:flex-row gap-4 items-center bg-slate-900/50 backdrop-blur-xl p-3 rounded-[2rem] border border-slate-800 shadow-sm relative z-10">
+                            {/* Search Bar */}
+                            <div className="relative flex-1 group w-full">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-amber-400 transition-colors" size={20} />
                                 <input
-                                    type="date"
-                                    value={customDate}
-                                    onChange={(e) => setCustomDate(e.target.value)}
-                                    className="h-12 px-6 rounded-2xl bg-amber-400/5 border border-amber-400/20 shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all text-amber-400 font-bold w-full"
+                                    type="text"
+                                    placeholder={view === 'procedures' ? "Buscar serviço..." : "Buscar por cliente..."}
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="h-12 pl-12 pr-6 rounded-2xl bg-slate-950/50 border border-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400/20 w-full text-slate-200 font-medium placeholder:text-slate-600"
                                 />
                             </div>
-                        )}
-                    </div>
+
+                            {/* Divider for Desktop */}
+                            <div className="hidden lg:block w-px h-8 bg-slate-800"></div>
+
+                            {/* Date Filters Switcher */}
+                            <div className="flex items-center gap-1 p-1 bg-slate-950/50 rounded-2xl w-full lg:w-auto overflow-x-auto border border-slate-800">
+                                {[
+                                    { id: 'all', label: 'Tudo' },
+                                    { id: 'today', label: 'Hoje' },
+                                    { id: 'week', label: 'Semana' },
+                                    { id: 'month', label: 'Mês' },
+                                    { id: 'custom', label: 'Calendário' }
+                                ].map((f) => (
+                                    <button
+                                        key={f.id}
+                                        onClick={() => setDateFilter(f.id as any)}
+                                        className={cn(
+                                            "px-5 h-10 rounded-xl text-sm font-bold transition-all whitespace-nowrap",
+                                            dateFilter === f.id
+                                                ? "bg-amber-400 text-slate-900 shadow-sm"
+                                                : "text-slate-500 hover:text-slate-300"
+                                        )}
+                                    >
+                                        {f.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {dateFilter === 'custom' && (
+                                <div className="relative w-full lg:w-auto animate-in fade-in slide-in-from-right-2">
+                                    <input
+                                        type="date"
+                                        value={customDate}
+                                        onChange={(e) => setCustomDate(e.target.value)}
+                                        className="h-12 px-6 rounded-2xl bg-amber-400/5 border border-amber-400/20 shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all text-amber-400 font-bold w-full"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                 </header>
 
@@ -784,71 +845,216 @@ export default function Dashboard() {
                                 </Button>
                             </div>
 
-                            {/* Timeline View */}
-                            <div className="relative border-t border-slate-800 pt-6">
-                                {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(hour => {
-                                    const hourStr = `${hour.toString().padStart(2, '0')}:00`;
-                                    const appointmentsAtHour = appointments.filter(a =>
-                                        a.status === 'confirmed' &&
-                                        format(new Date(a.start_time), 'yyyy-MM-dd') === format(agendaDate, 'yyyy-MM-dd') &&
-                                        new Date(a.start_time).getHours() === hour
-                                    ).sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+                            {/* Timeline View - Calendar Style */}
+                            {(() => {
+                                const HOUR_HEIGHT = 80; // pixels per hour
+                                const START_HOUR = 8;
+                                const END_HOUR = 21;
+                                const TOTAL_HOURS = END_HOUR - START_HOUR;
 
-                                    const isBlocked = blockages.some(b => {
-                                        const start = new Date(b.start_time);
-                                        const end = new Date(b.end_time);
-                                        const currentHour = new Date(agendaDate);
-                                        currentHour.setHours(hour, 0, 0, 0);
-                                        return currentHour >= start && currentHour < end;
+                                // Get all confirmed appointments for this day (respecting search filter)
+                                const dayAppointments = filteredAppointments.filter(a =>
+                                    a.status === 'confirmed' &&
+                                    format(new Date(a.start_time), 'yyyy-MM-dd') === format(agendaDate, 'yyyy-MM-dd')
+                                );
+
+                                // Get blockages for this day
+                                const dayBlockages = blockages.filter(b => {
+                                    const start = new Date(b.start_time);
+                                    const end = new Date(b.end_time);
+                                    const dayStart = new Date(agendaDate);
+                                    dayStart.setHours(0, 0, 0, 0);
+                                    const dayEnd = new Date(agendaDate);
+                                    dayEnd.setHours(23, 59, 59, 999);
+                                    return start <= dayEnd && end >= dayStart;
+                                });
+
+                                // Algorithm to assign columns to overlapping appointments
+                                const assignColumns = (apps: typeof dayAppointments) => {
+                                    const sorted = [...apps].sort((a, b) =>
+                                        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+                                    );
+
+                                    const columns: (typeof dayAppointments)[] = [];
+                                    const appColumns: Map<string, { column: number; totalColumns: number }> = new Map();
+
+                                    sorted.forEach(app => {
+                                        const appStart = new Date(app.start_time).getTime();
+
+                                        // Find first column where this appointment fits
+                                        let columnIndex = 0;
+                                        for (let i = 0; i < columns.length; i++) {
+                                            const lastInColumn = columns[i][columns[i].length - 1];
+                                            if (new Date(lastInColumn.end_time).getTime() <= appStart) {
+                                                columnIndex = i;
+                                                break;
+                                            }
+                                            columnIndex = i + 1;
+                                        }
+
+                                        if (!columns[columnIndex]) {
+                                            columns[columnIndex] = [];
+                                        }
+                                        columns[columnIndex].push(app);
+                                        appColumns.set(app.id, { column: columnIndex, totalColumns: 0 });
                                     });
 
-                                    return (
-                                        <div key={hour} className="flex gap-6 min-h-[100px] border-b border-slate-800/30 group">
-                                            <div className="w-20 pt-4 text-right">
-                                                <span className="text-xs font-black text-slate-500 uppercase tracking-widest">{hourStr}</span>
-                                            </div>
-                                            <div className="flex-1 py-1 relative">
-                                                {isBlocked ? (
-                                                    <div className="h-full bg-red-500/5 border-l-4 border-red-500/50 flex items-center px-6">
-                                                        <div className="flex items-center gap-2 text-red-500/50">
-                                                            <X size={16} />
-                                                            <span className="text-[10px] font-black uppercase tracking-widest">Horário Bloqueado</span>
+                                    // Calculate total columns for each time slot
+                                    sorted.forEach(app => {
+                                        const appStart = new Date(app.start_time).getTime();
+                                        const appEnd = new Date(app.end_time).getTime();
+
+                                        // Count overlapping appointments
+                                        const overlapping = sorted.filter(other => {
+                                            const otherStart = new Date(other.start_time).getTime();
+                                            const otherEnd = new Date(other.end_time).getTime();
+                                            return appStart < otherEnd && appEnd > otherStart;
+                                        });
+
+                                        const maxColumn = Math.max(...overlapping.map(o => appColumns.get(o.id)?.column || 0));
+                                        overlapping.forEach(o => {
+                                            const current = appColumns.get(o.id)!;
+                                            appColumns.set(o.id, { ...current, totalColumns: maxColumn + 1 });
+                                        });
+                                    });
+
+                                    return appColumns;
+                                };
+
+                                const columnAssignments = assignColumns(dayAppointments);
+
+                                return (
+                                    <div className="relative border-t border-slate-800 pt-6">
+                                        {/* Hour grid lines */}
+                                        <div className="relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
+                                            {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i).map(hour => {
+                                                const hourStr = `${hour.toString().padStart(2, '0')}:00`;
+                                                const isBlocked = dayBlockages.some(b => {
+                                                    const start = new Date(b.start_time);
+                                                    const end = new Date(b.end_time);
+                                                    const currentHour = new Date(agendaDate);
+                                                    currentHour.setHours(hour, 0, 0, 0);
+                                                    return currentHour >= start && currentHour < end;
+                                                });
+
+                                                return (
+                                                    <div
+                                                        key={hour}
+                                                        className="absolute left-0 right-0 flex"
+                                                        style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }}
+                                                    >
+                                                        <div className="w-20 text-right pr-4 -mt-2">
+                                                            <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                                                                {hourStr}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex-1 border-t border-slate-800/30 relative group">
+                                                            {isBlocked ? (
+                                                                <div
+                                                                    className="absolute inset-0 bg-red-500/5 border-l-4 border-red-500/30 flex items-center px-4"
+                                                                    style={{ height: HOUR_HEIGHT }}
+                                                                >
+                                                                    <div className="flex items-center gap-2 text-red-500/50">
+                                                                        <X size={14} />
+                                                                        <span className="text-[9px] font-black uppercase tracking-widest">Bloqueado</span>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const dateStr = format(agendaDate, 'yyyy-MM-dd');
+                                                                        const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+                                                                        setSelectedSlotForNew({ date: dateStr, time: timeStr });
+                                                                        setShowManualModal(true);
+                                                                    }}
+                                                                    className="absolute inset-0 hover:bg-amber-400/5 transition-colors cursor-pointer"
+                                                                    style={{ height: HOUR_HEIGHT }}
+                                                                >
+                                                                    <span className="absolute left-4 top-2 text-[9px] font-black text-slate-700 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        + Adicionar
+                                                                    </span>
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
-                                                ) : appointmentsAtHour.length === 0 ? (
-                                                    <div className="h-full border-l border-slate-800/50 group-hover:bg-slate-900/20 transition-colors flex items-center px-6 opacity-0 group-hover:opacity-100">
-                                                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-[0.2em]">Horário Disponível</span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex flex-col gap-2 py-2 border-l-4 border-amber-400 pl-4 bg-amber-400/5">
-                                                        {appointmentsAtHour.map(app => (
-                                                            <div key={app.id} className="flex justify-between items-center group/item">
-                                                                <div>
-                                                                    <p className="text-white font-black text-lg leading-none mb-1">
+                                                );
+                                            })}
+
+                                            {/* Appointment blocks */}
+                                            <div className="absolute left-20 right-0 top-0 bottom-0">
+                                                {dayAppointments.map(app => {
+                                                    const appStart = new Date(app.start_time);
+                                                    const appEnd = new Date(app.end_time);
+                                                    const startMinutes = appStart.getHours() * 60 + appStart.getMinutes();
+                                                    const endMinutes = appEnd.getHours() * 60 + appEnd.getMinutes();
+                                                    const totalMinutes = endMinutes - startMinutes;
+
+                                                    const minutesOffset = (startMinutes / 60 - START_HOUR) * HOUR_HEIGHT;
+
+                                                    // Render appointment card
+                                                    const durationHours = (appEnd.getTime() - appStart.getTime()) / (1000 * 60 * 60);
+                                                    const heightPx = Math.max(durationHours * HOUR_HEIGHT, 40);
+
+                                                    // Handle overlaps width logic
+                                                    const colInfo = columnAssignments.get(app.id);
+                                                    const colWidth = 100 / (colInfo?.totalColumns || 1);
+                                                    const colLeft = (colInfo?.column || 0) * colWidth;
+
+                                                    const colors = getCategoryColor(app.procedure?.category);
+
+                                                    return (
+                                                        <div
+                                                            key={app.id}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEditingAppointment(app);
+                                                            }}
+                                                            className={cn(
+                                                                "absolute border-l-4 transition-all hover:scale-[1.01] hover:z-30 cursor-pointer shadow-lg group overflow-hidden",
+                                                                colors.bg,
+                                                                colors.border,
+                                                                "rounded-r-2xl py-3 px-4"
+                                                            )}
+                                                            style={{
+                                                                top: `${minutesOffset}px`,
+                                                                height: `${heightPx}px`,
+                                                                left: `${colLeft}%`,
+                                                                width: `${colWidth}%`,
+                                                                minWidth: colInfo && colInfo.totalColumns > 2 ? '80px' : 'auto', // Ensure min width on mobile
+                                                                zIndex: 20
+                                                            }}
+                                                        >
+                                                            <div className="flex flex-col h-full">
+                                                                <div className="flex justify-between items-start mb-1">
+                                                                    <div className="font-black text-[11px] sm:text-xs uppercase tracking-tighter truncate text-white pr-2">
                                                                         {app.client_name}
-                                                                        <span className="ml-3 text-[10px] text-amber-400 opacity-60 font-black uppercase tracking-widest">
-                                                                            {format(new Date(app.start_time), "HH:mm")}
-                                                                        </span>
-                                                                    </p>
-                                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                                                                        {app.procedure?.name} • {app.procedure?.duration_minutes} min
-                                                                    </p>
+                                                                    </div>
+                                                                    <div className="text-[9px] font-black opacity-80 text-white/90 shrink-0">
+                                                                        {format(appStart, 'HH:mm')} - {format(appEnd, 'HH:mm')}
+                                                                    </div>
                                                                 </div>
-                                                                <button
-                                                                    onClick={() => setSelectedClient({ name: app.client_name, phone: app.client_phone })}
-                                                                    className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white hover:border-amber-400/50 transition-all opacity-0 group-hover/item:opacity-100"
-                                                                >
-                                                                    <Users size={16} />
-                                                                </button>
+
+                                                                {heightPx > 40 && (
+                                                                    <div className="text-[10px] font-bold text-white/80 truncate mb-auto">
+                                                                        {app.procedure?.name}
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="flex items-center gap-1 mt-auto">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
+                                                                    <span className="text-[8px] font-black uppercase text-white/60">
+                                                                        {app.procedure?.duration_minutes}m
+                                                                    </span>
+                                                                </div>
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 ) : view === 'requests' ? (
@@ -901,26 +1107,28 @@ export default function Dashboard() {
 
 
                                             <div className="flex flex-col gap-3">
-                                                <div className="flex gap-2">
+                                                <div className="flex flex-col gap-2">
                                                     <button
                                                         onClick={() => updateStatus(app, 'confirmed')}
-                                                        className="flex-1 h-12 bg-amber-400 hover:bg-amber-500 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20"
+                                                        className="w-full min-h-[48px] py-3 px-4 bg-amber-400 hover:bg-amber-500 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20"
                                                     >
-                                                        Confirmar e Avisar
+                                                        <Check size={18} /> Confirmar e Avisar
                                                     </button>
-                                                    <button
-                                                        onClick={() => setEditingAppointment(app)}
-                                                        className="h-12 px-4 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 rounded-2xl font-bold flex items-center justify-center transition-all"
-                                                        title="Ajustar Horário"
-                                                    >
-                                                        <Clock size={20} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => updateStatus(app, 'cancelled')}
-                                                        className="h-12 px-4 bg-transparent hover:bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl font-bold flex items-center justify-center transition-all"
-                                                    >
-                                                        <X size={20} />
-                                                    </button>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => setEditingAppointment(app)}
+                                                            className="flex-1 h-12 px-4 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 rounded-2xl font-bold flex items-center justify-center transition-all"
+                                                            title="Ajustar Horário"
+                                                        >
+                                                            <Clock size={20} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => updateStatus(app, 'cancelled')}
+                                                            className="flex-1 h-12 px-4 bg-transparent hover:bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl font-bold flex items-center justify-center transition-all"
+                                                        >
+                                                            <X size={20} />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <a
                                                     href={`https://wa.me/${app.client_phone.replace(/\D/g, '')}`}
@@ -1013,10 +1221,17 @@ export default function Dashboard() {
                                 <form onSubmit={(e) => {
                                     e.preventDefault();
                                     const fd = new FormData(e.currentTarget);
+                                    const startValue = fd.get('start') as string;
+                                    const endValue = fd.get('end') as string;
+
+                                    // Convert datetime-local to ISO format
+                                    const startTime = new Date(startValue).toISOString();
+                                    const endTime = new Date(endValue).toISOString();
+
                                     handleSaveBlockage({
-                                        start_time: fd.get('start'),
-                                        end_time: fd.get('end'),
-                                        reason: fd.get('reason')
+                                        start_time: startTime,
+                                        end_time: endTime,
+                                        reason: fd.get('reason') || ''
                                     });
                                     (e.target as HTMLFormElement).reset();
                                 }} className="space-y-6">
@@ -1034,7 +1249,7 @@ export default function Dashboard() {
                                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Motivo (Ficará visível para você)</label>
                                         <input name="reason" type="text" placeholder="Ex: Férias, Médico, Curso..." className="w-full h-16 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white font-bold placeholder:text-slate-800 focus:ring-2 focus:ring-amber-400/20" />
                                     </div>
-                                    <button className="w-full h-18 bg-amber-400 hover:bg-amber-500 text-slate-900 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all h-16">
+                                    <button type="submit" className="w-full h-16 bg-amber-400 hover:bg-amber-500 text-slate-900 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all">
                                         Efetuar Bloqueio de Horário
                                     </button>
                                 </form>
@@ -1071,6 +1286,146 @@ export default function Dashboard() {
                             </div>
                         </div>
                     </div>
+                ) : view === 'finances' ? (
+                    <div className="space-y-8 relative z-10 animate-in fade-in duration-500">
+                        {/* Period Summary Header */}
+                        <div className="flex flex-col gap-6">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                                <div>
+                                    <h4 className="text-3xl font-black text-white italic uppercase tracking-tighter">Finanças 💰</h4>
+                                    <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] mt-2">
+                                        Monitoramento de faturamento e produtividade
+                                    </p>
+                                </div>
+
+                                {/* Period Selection Mode */}
+                                <div className="flex items-center gap-1 p-1 bg-slate-950/50 rounded-2xl border border-slate-800 w-full md:w-auto">
+                                    {[
+                                        { id: 'today', label: 'Diário', icon: Calendar },
+                                        { id: 'week', label: 'Semanal', icon: Clock },
+                                        { id: 'month', label: 'Mês Atual', icon: PieChartIcon },
+                                        { id: 'custom', label: 'Escolher Mês', icon: Search },
+                                    ].map((f) => (
+                                        <button
+                                            key={f.id}
+                                            onClick={() => setDateFilter(f.id as any)}
+                                            className={cn(
+                                                "flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
+                                                dateFilter === f.id
+                                                    ? "bg-amber-400 text-slate-900 shadow-lg shadow-amber-500/20"
+                                                    : "text-slate-500 hover:text-white hover:bg-slate-800"
+                                            )}
+                                        >
+                                            <f.icon size={12} /> {f.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {dateFilter === 'custom' && (
+                                <div className="p-4 bg-amber-400/5 border border-amber-400/20 rounded-2xl flex flex-wrap items-center gap-4 animate-in slide-in-from-top-2">
+                                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-[0.2em]">Escolher:</span>
+                                    <input
+                                        type="month"
+                                        value={customDate.slice(0, 7)}
+                                        onChange={(e) => setCustomDate(e.target.value)}
+                                        className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-white text-sm focus:ring-amber-400/50"
+                                    />
+                                    <button
+                                        onClick={() => setDateFilter('custom')}
+                                        className="text-[9px] text-slate-500 font-bold hover:text-white uppercase tracking-widest border border-slate-800 px-3 py-2 rounded-xl"
+                                    >
+                                        Limpar
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Stats Cards - Specific for Finances */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Receita Total</p>
+                                    <p className="text-xl font-black text-emerald-400">R$ {stats.totalEarnings.toLocaleString('pt-BR')}</p>
+                                </div>
+                                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Atendimentos</p>
+                                    <p className="text-xl font-black text-white">{stats.totalCount}</p>
+                                </div>
+                                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Ticket Médio</p>
+                                    <p className="text-xl font-black text-amber-400">
+                                        R$ {stats.totalCount > 0 ? (stats.totalEarnings / stats.totalCount).toFixed(0) : '0'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Transaction List - Desktop Table / Mobile Cards */}
+                        <div className="bg-slate-900/40 backdrop-blur-xl p-4 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-800">
+                            <div className="flex justify-between items-center mb-8">
+                                <h5 className="text-xl font-black text-white uppercase italic tracking-widest">Transações</h5>
+                                <div className="px-4 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                                    Confirmados
+                                </div>
+                            </div>
+
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="border-b border-slate-800">
+                                            <th className="pb-4 font-black text-slate-500 text-[10px] uppercase pl-4 tracking-[0.2em]">Data/Hora</th>
+                                            <th className="pb-4 font-black text-slate-500 text-[10px] uppercase tracking-[0.2em]">Cliente</th>
+                                            <th className="pb-4 font-black text-slate-500 text-[10px] uppercase tracking-[0.2em]">Serviço</th>
+                                            <th className="pb-4 font-black text-slate-500 text-[10px] uppercase text-right pr-4 tracking-[0.2em]">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800/50">
+                                        {appointments.filter(a => a.status === 'confirmed').map(app => (
+                                            <tr key={app.id} className="group hover:bg-slate-800/30 transition-colors">
+                                                <td className="py-4 pl-4">
+                                                    <div className="font-bold text-white text-sm">{format(new Date(app.start_time), 'dd/MM')}</div>
+                                                    <div className="text-[9px] font-black text-slate-500 uppercase">{format(new Date(app.start_time), 'HH:mm')}</div>
+                                                </td>
+                                                <td className="py-4">
+                                                    <div className="font-bold text-white text-sm">{app.client_name}</div>
+                                                    <div className="text-[9px] font-black text-slate-500">{app.client_phone}</div>
+                                                </td>
+                                                <td className="py-4">
+                                                    <div className="text-xs font-medium text-slate-400">{app.procedure?.name}</div>
+                                                </td>
+                                                <td className="py-4 text-right pr-4">
+                                                    <div className="font-black text-white italic">R$ {app.procedure?.price || 0}</div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Mobile Card View */}
+                            <div className="md:hidden space-y-4">
+                                {appointments.filter(a => a.status === 'confirmed').length === 0 ? (
+                                    <p className="text-center py-10 text-slate-600 font-bold uppercase text-xs">Sem transações</p>
+                                ) : (
+                                    appointments.filter(a => a.status === 'confirmed').map(app => (
+                                        <div key={app.id} className="p-5 bg-slate-950/40 border border-slate-800 rounded-2xl space-y-3">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="font-black text-white text-sm uppercase">{app.client_name}</div>
+                                                    <div className="text-[10px] font-bold text-slate-500">{format(new Date(app.start_time), "dd/MM 'às' HH:mm")}</div>
+                                                </div>
+                                                <div className="text-emerald-400 font-black italic">R$ {app.procedure?.price || 0}</div>
+                                            </div>
+                                            <div className="pt-2 border-t border-slate-800/50">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{app.procedure?.name}</p>
+                                                <p className="text-[9px] font-bold text-slate-600 uppercase mt-1">{app.procedure?.category}</p>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 ) : (
                     <div className="space-y-6 relative z-10">
                         <div className="bg-slate-900/40 backdrop-blur-xl p-8 rounded-[2.5rem] shadow-sm border border-slate-800">
@@ -1082,6 +1437,7 @@ export default function Dashboard() {
                                 </div>
                             </div>
 
+                            {/* Desktop Table View */}
                             <div className="hidden md:block overflow-x-auto">
                                 <table className="w-full text-left">
                                     <thead>
@@ -1140,36 +1496,38 @@ export default function Dashboard() {
                                 </table>
                             </div>
 
-                            {/* Mobile Card List */}
+                            {/* Mobile Card View for History */}
                             <div className="md:hidden space-y-4">
                                 {filteredAppointments.length === 0 ? (
-                                    <div className="py-10 text-center text-slate-600">
-                                        <p className="font-bold uppercase italic tracking-tighter">Nenhum agendamento encontrado.</p>
+                                    <div className="py-12 text-center bg-slate-950/20 rounded-3xl border border-dashed border-slate-800">
+                                        <p className="font-black text-slate-600 uppercase text-xs tracking-widest">Nenhum resultado</p>
                                     </div>
                                 ) : (
                                     filteredAppointments.map(app => (
-                                        <div key={app.id} className="p-5 rounded-2xl bg-slate-950/50 border border-slate-800 space-y-3">
+                                        <div key={app.id} className="p-5 bg-slate-950/40 border border-slate-800 rounded-2xl space-y-4">
                                             <div className="flex justify-between items-start">
-                                                <div>
-                                                    <div className="font-black text-white text-lg leading-tight mb-1">{app.client_name}</div>
-                                                    <div className="text-[10px] font-black text-slate-500 tracking-[0.2em]">{app.client_phone}</div>
+                                                <div className="space-y-1">
+                                                    <div className="font-black text-white text-sm uppercase leading-tight">{app.client_name}</div>
+                                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                                        {format(new Date(app.start_time), "dd/MM 'às' HH:mm")}
+                                                    </div>
                                                 </div>
                                                 <span className={cn(
-                                                    "px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest",
-                                                    app.status === 'confirmed' ? "bg-amber-400/10 text-amber-400 border border-amber-400/20" :
-                                                        app.status === 'pending' ? "bg-slate-800 text-amber-400" : "text-red-500 bg-red-500/10 border border-red-500/20"
+                                                    "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
+                                                    app.status === 'confirmed' ? "bg-amber-400/10 text-amber-400 border-amber-400/20" :
+                                                        app.status === 'pending' ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-red-500/10 text-red-500 border-red-500/20"
                                                 )}>
-                                                    {app.status === 'confirmed' ? 'Confirmado' : app.status === 'pending' ? 'Pendente' : 'Cancelado'}
+                                                    {app.status === 'confirmed' ? '✓ Confirmado' : app.status === 'pending' ? 'Pendente' : 'Cancelado'}
                                                 </span>
                                             </div>
-                                            <div className="flex justify-between items-center pt-2 border-t border-slate-800/50">
-                                                <div className="flex flex-col">
-                                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-0.5">Serviço</span>
-                                                    <span className="text-xs font-bold text-slate-400">{app.procedure?.name}</span>
+
+                                            <div className="pt-3 border-t border-slate-800/50 flex justify-between items-end">
+                                                <div className="space-y-0.5">
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{app.procedure?.name}</p>
+                                                    <p className="text-[9px] font-bold text-slate-600 uppercase italic">{app.procedure?.category}</p>
                                                 </div>
-                                                <div className="text-right flex flex-col items-end">
-                                                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-0.5">{format(new Date(app.start_time), 'dd MMM')}</span>
-                                                    <span className="text-sm font-black text-amber-300">{format(new Date(app.start_time), 'HH:mm')}</span>
+                                                <div className="text-amber-400 font-black italic text-sm">
+                                                    R$ {app.procedure?.price || 0}
                                                 </div>
                                             </div>
                                         </div>
@@ -1199,6 +1557,19 @@ export default function Dashboard() {
                             </div>
 
                             <div className="space-y-2">
+                                <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest ml-1">Procedimento</label>
+                                <select
+                                    id="new-procedure-input"
+                                    defaultValue={editingAppointment.procedure_id}
+                                    className="w-full h-14 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white font-bold focus:ring-2 focus:ring-amber-400/20 appearance-none"
+                                >
+                                    {procedures.map(p => (
+                                        <option key={p.id} value={p.id} className="bg-slate-900">{p.name} ({p.duration_minutes}min)</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
                                 <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest ml-1">Novo Horário</label>
                                 <input
                                     type="datetime-local"
@@ -1210,7 +1581,11 @@ export default function Dashboard() {
 
                             <div className="flex gap-3 pt-4 pb-safe">
                                 <Button
-                                    onClick={() => handleAdjust(editingAppointment, (document.getElementById('new-time-input') as HTMLInputElement).value)}
+                                    onClick={() => {
+                                        const newProcId = (document.getElementById('new-procedure-input') as HTMLSelectElement).value;
+                                        const newTime = (document.getElementById('new-time-input') as HTMLInputElement).value;
+                                        handleAdjust(editingAppointment, newTime, newProcId);
+                                    }}
                                     className="flex-1 h-16 rounded-2xl bg-amber-400 text-slate-900 font-black text-lg hover:bg-amber-500 transition-all shadow-lg shadow-amber-500/10"
                                 >
                                     Confirmar Ajuste
@@ -1298,11 +1673,14 @@ export default function Dashboard() {
             )}
             {showManualModal && (
                 <ManualAppointmentModal
-                    onClose={() => setShowManualModal(false)}
+                    onClose={() => { setShowManualModal(false); setSelectedSlotForNew(null); }}
                     onSuccess={() => {
                         setShowManualModal(false);
+                        setSelectedSlotForNew(null);
                         loadData();
                     }}
+                    initialDate={selectedSlotForNew?.date}
+                    initialTime={selectedSlotForNew?.time}
                 />
             )}
             {showProcedureModal && (
@@ -1457,7 +1835,7 @@ export default function Dashboard() {
                             <div className="w-10 h-10 bg-amber-400 rounded-xl flex items-center justify-center text-slate-950 shrink-0">
                                 <Zap size={20} className="fill-slate-950" />
                             </div>
-                            <h2 className="text-lg sm:text-xl font-black text-white uppercase italic tracking-tighter truncate">Modo Atendimento</h2>
+                            <h2 className="text-lg sm:text-xl font-black text-white uppercase italic tracking-tighter truncate">Modo Foco</h2>
                         </div>
                         <button
                             onClick={() => setShowFocusMode(false)}
@@ -1577,68 +1955,41 @@ export default function Dashboard() {
             )}
 
             {/* Mobile Bottom Navigation (Instagram Style) */}
-            <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-2xl border-t border-white/5 z-50 px-2 pb-safe flex justify-around items-center h-16">
-                <button
-                    onClick={() => setView('stats')}
-                    className={cn(
-                        "flex flex-col items-center justify-center w-full transition-all gap-1",
-                        view === 'stats' ? "text-amber-400 scale-105" : "text-slate-500"
-                    )}
-                >
-                    <PieChartIcon size={20} strokeWidth={view === 'stats' ? 2.5 : 2} />
-                    <span className="text-[9px] font-black uppercase tracking-tighter">Início</span>
-                </button>
-
-                <button
-                    onClick={() => setView('agenda')}
-                    className={cn(
-                        "flex flex-col items-center justify-center w-full transition-all gap-1",
-                        view === 'agenda' ? "text-amber-400 scale-105" : "text-slate-500"
-                    )}
-                >
-                    <Calendar size={20} strokeWidth={view === 'agenda' ? 2.5 : 2} />
-                    <span className="text-[9px] font-black uppercase tracking-tighter">Agenda</span>
-                </button>
-
-                <button
-                    onClick={() => setView('requests')}
-                    className={cn(
-                        "flex flex-col items-center justify-center w-full transition-all gap-1 relative",
-                        view === 'requests' ? "text-amber-400 scale-105" : "text-slate-500"
-                    )}
-                >
-                    <div className="relative">
-                        <Inbox size={20} strokeWidth={view === 'requests' ? 2.5 : 2} />
-                        {appointments.filter(a => a.status === 'pending').length > 0 && (
-                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-500 text-slate-950 text-[8px] font-black rounded-full flex items-center justify-center border border-slate-950">
-                                {appointments.filter(a => a.status === 'pending').length}
-                            </span>
+            <nav className="lg:hidden fixed bottom-1 left-3 right-3 bg-slate-900/90 backdrop-blur-2xl border border-white/10 z-50 px-2 pb-safe flex justify-between items-center h-16 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+                {[
+                    { id: 'agenda', label: 'Agenda', icon: Calendar },
+                    { id: 'finances', label: 'Finanças', icon: DollarSign },
+                    { id: 'requests', label: 'Solicita', icon: Inbox, badge: appointments.filter(a => a.status === 'pending').length },
+                    { id: 'procedures', label: 'Serviços', icon: Sparkles },
+                    { id: 'settings', label: 'Folgas', icon: Settings },
+                ].map((item) => (
+                    <button
+                        key={item.id}
+                        onClick={() => setView(item.id as any)}
+                        className={cn(
+                            "flex flex-col items-center justify-center flex-1 transition-all gap-1.5 min-w-0 h-full",
+                            view === item.id ? "text-amber-400" : "text-slate-500"
                         )}
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-tighter">Solicitação</span>
-                </button>
-
-                <button
-                    onClick={() => setView('procedures')}
-                    className={cn(
-                        "flex flex-col items-center justify-center w-full transition-all gap-1",
-                        view === 'procedures' ? "text-amber-400 scale-105" : "text-slate-500"
-                    )}
-                >
-                    <Sparkles size={20} strokeWidth={view === 'procedures' ? 2.5 : 2} />
-                    <span className="text-[9px] font-black uppercase tracking-tighter">Serviços</span>
-                </button>
-
-                <button
-                    onClick={() => setView('settings')}
-                    className={cn(
-                        "flex flex-col items-center justify-center w-full transition-all gap-1",
-                        view === 'settings' ? "text-amber-400 scale-105" : "text-slate-500"
-                    )}
-                >
-                    <Settings size={20} strokeWidth={view === 'settings' ? 2.5 : 2} />
-                    <span className="text-[9px] font-black uppercase tracking-tighter">Folga</span>
-                </button>
+                    >
+                        <div className="relative">
+                            <item.icon size={20} className={cn("transition-transform", view === item.id ? "scale-110" : "scale-100")} strokeWidth={view === item.id ? 2.5 : 2} />
+                            {item.badge ? (
+                                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-500 text-slate-950 text-[9px] font-black rounded-full flex items-center justify-center border-2 border-slate-900">
+                                    {item.badge}
+                                </span>
+                            ) : null}
+                        </div>
+                        <span className={cn(
+                            "text-[8px] font-black uppercase tracking-tighter truncate w-full px-0.5 text-center",
+                            view === item.id ? "opacity-100" : "opacity-50"
+                        )}>
+                            {item.label}
+                        </span>
+                        {view === item.id && (
+                            <div className="absolute bottom-1 w-1 h-1 bg-amber-400 rounded-full" />
+                        )}
+                    </button>
+                ))}
             </nav>
         </div>
     );

@@ -1,125 +1,194 @@
-import { useRef, useState } from 'react';
-import { format, isSameDay, isToday, startOfMonth, endOfMonth, eachDayOfInterval, startOfToday, isAfter, getMonth, getYear } from 'date-fns';
+import { useState, useEffect } from 'react';
+import { format, isSameDay, isToday, startOfMonth, endOfMonth, eachDayOfInterval, startOfToday, isAfter, getMonth, addMonths, subMonths, startOfWeek, endOfWeek, isBefore, setHours, setMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface DateSelectorProps {
     selectedDate: Date | null;
     onSelect: (date: Date) => void;
 }
 
+interface Blockage {
+    start_time: string;
+    end_time: string;
+}
+
+const OPEN_HOUR = 10;
+const CLOSE_HOUR = 18;
+
 export function DateSelector({ selectedDate, onSelect }: DateSelectorProps) {
-    const scrollRef = useRef<HTMLDivElement>(null);
     const today = startOfToday();
-
-    // Get all months from current month to December
-    const currentMonthIndex = getMonth(today);
-    const currentYear = getYear(today);
-    const months = Array.from({ length: 12 - currentMonthIndex }).map((_, i) => {
-        const monthDate = new Date(currentYear, currentMonthIndex + i, 1);
-        return {
-            date: monthDate,
-            label: format(monthDate, 'MMMM', { locale: ptBR })
-        };
-    });
-
     const [activeMonth, setActiveMonth] = useState(
         selectedDate ? startOfMonth(selectedDate) : startOfMonth(today)
     );
+    const [blockages, setBlockages] = useState<Blockage[]>([]);
 
-    // Days for the active month
-    const days = eachDayOfInterval({
-        start: startOfMonth(activeMonth),
-        end: endOfMonth(activeMonth)
-    }).filter(date => {
+    // Fetch blockages for the active month
+    useEffect(() => {
+        async function fetchBlockages() {
+            const monthStart = startOfMonth(activeMonth);
+            const monthEnd = endOfMonth(activeMonth);
+
+            const { data, error } = await supabase
+                .from('blocked_slots')
+                .select('start_time, end_time')
+                .lte('start_time', monthEnd.toISOString())
+                .gte('end_time', monthStart.toISOString());
+
+            if (error) {
+                console.warn('Erro ao buscar bloqueios:', error);
+                setBlockages([]);
+            } else {
+                setBlockages(data || []);
+            }
+        }
+
+        fetchBlockages();
+    }, [activeMonth]);
+
+    // Check if a day is fully blocked (blockage covers entire work day)
+    const isDayFullyBlocked = (date: Date): boolean => {
+        const workStart = setMinutes(setHours(date, OPEN_HOUR), 0);
+        const workEnd = setMinutes(setHours(date, CLOSE_HOUR), 0);
+
+        return blockages.some(block => {
+            const blockStart = new Date(block.start_time);
+            const blockEnd = new Date(block.end_time);
+            // Blockage covers the full day if it starts at or before work start AND ends at or after work end
+            return blockStart <= workStart && blockEnd >= workEnd;
+        });
+    };
+
+    // Get days for calendar grid (includes padding days from prev/next months)
+    const monthStart = startOfMonth(activeMonth);
+    const monthEnd = endOfMonth(activeMonth);
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 }); // Sunday
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+
+    const allDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+
+    // Check if a day is available (not past, not Sunday/Monday, in current month, not blocked)
+    const isAvailable = (date: Date) => {
+        const isCurrentMonth = getMonth(date) === getMonth(activeMonth);
         const isNotPast = isSameDay(date, today) || isAfter(date, today);
         const dayOfWeek = date.getDay();
         const isWorkingDay = dayOfWeek !== 0 && dayOfWeek !== 1; // 0=Sunday, 1=Monday
-        return isNotPast && isWorkingDay;
-    });
-
-    const scroll = (direction: 'left' | 'right') => {
-        if (scrollRef.current) {
-            const scrollAmount = 200;
-            scrollRef.current.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
-        }
+        const isNotBlocked = !isDayFullyBlocked(date);
+        return isCurrentMonth && isNotPast && isWorkingDay && isNotBlocked;
     };
 
+    const navigateMonth = (direction: 'prev' | 'next') => {
+        const newMonth = direction === 'prev' ? subMonths(activeMonth, 1) : addMonths(activeMonth, 1);
+        // Don't allow navigation to past months
+        if (direction === 'prev' && isBefore(newMonth, startOfMonth(today))) return;
+        setActiveMonth(newMonth);
+    };
+
+    const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
     return (
-        <div className="space-y-6">
-            {/* Seletor de Mês */}
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2">
-                {months.map((m) => {
-                    const isSelected = getMonth(m.date) === getMonth(activeMonth);
+        <div className="space-y-4">
+            {/* Month Navigation Header */}
+            <div className="flex items-center justify-between px-2">
+                <button
+                    onClick={() => navigateMonth('prev')}
+                    disabled={isBefore(subMonths(activeMonth, 1), startOfMonth(today))}
+                    className={cn(
+                        "p-2 rounded-full transition-all",
+                        isBefore(subMonths(activeMonth, 1), startOfMonth(today))
+                            ? "text-slate-300 cursor-not-allowed"
+                            : "text-slate-600 hover:bg-slate-100"
+                    )}
+                >
+                    <ChevronLeft size={24} />
+                </button>
+
+                <h3 className="text-lg font-black text-slate-800 capitalize">
+                    {format(activeMonth, 'MMMM yyyy', { locale: ptBR })}
+                </h3>
+
+                <button
+                    onClick={() => navigateMonth('next')}
+                    className="p-2 rounded-full text-slate-600 hover:bg-slate-100 transition-all"
+                >
+                    <ChevronRight size={24} />
+                </button>
+            </div>
+
+            {/* Weekday Headers */}
+            <div className="grid grid-cols-7 gap-1">
+                {weekDays.map((day, i) => (
+                    <div
+                        key={day}
+                        className={cn(
+                            "text-center text-xs font-bold uppercase py-2",
+                            i === 0 || i === 1 ? "text-slate-300" : "text-slate-500"
+                        )}
+                    >
+                        {day}
+                    </div>
+                ))}
+            </div>
+
+            {/* Calendar Grid */}
+            <div className="grid grid-cols-7 gap-1">
+                {allDays.map((date) => {
+                    const isCurrentMonth = getMonth(date) === getMonth(activeMonth);
+                    const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
+                    const available = isAvailable(date);
+                    const isPast = !isSameDay(date, today) && isBefore(date, today);
+                    const dayOfWeek = date.getDay();
+                    const isClosedDay = dayOfWeek === 0 || dayOfWeek === 1;
+                    const isBlocked = isCurrentMonth && !isPast && !isClosedDay && isDayFullyBlocked(date);
+
                     return (
                         <button
-                            key={m.label}
-                            onClick={() => setActiveMonth(m.date)}
+                            key={date.toISOString()}
+                            onClick={() => available && onSelect(date)}
+                            disabled={!available}
                             className={cn(
-                                "px-4 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap border-2",
-                                isSelected
-                                    ? "bg-slate-900 border-slate-900 text-white shadow-md"
-                                    : "bg-white border-slate-100 text-slate-500 hover:border-slate-300"
+                                "aspect-square flex flex-col items-center justify-center rounded-xl text-sm font-bold transition-all",
+                                // Not in current month
+                                !isCurrentMonth && "opacity-0 pointer-events-none",
+                                // Available and selected
+                                isSelected && "bg-primary text-white shadow-lg shadow-amber-500/30 scale-105",
+                                // Available but not selected
+                                available && !isSelected && "bg-white border border-slate-100 text-slate-800 hover:border-primary hover:shadow-md",
+                                // Past day
+                                isCurrentMonth && isPast && "bg-slate-50 text-slate-300 cursor-not-allowed",
+                                // Closed day (Sunday/Monday) OR Fully blocked day
+                                isCurrentMonth && !isPast && (isClosedDay || isBlocked) && "bg-slate-50 text-slate-300 cursor-not-allowed",
                             )}
                         >
-                            {m.label.charAt(0).toUpperCase() + m.label.slice(1)}
+                            <span className={cn(
+                                "text-base font-black",
+                                isSelected ? "text-white" : ""
+                            )}>
+                                {format(date, 'd')}
+                            </span>
+                            {isToday(date) && (
+                                <span className={cn(
+                                    "text-[8px] uppercase font-bold mt-0.5",
+                                    isSelected ? "text-white/80" : "text-primary"
+                                )}>
+                                    Hoje
+                                </span>
+                            )}
                         </button>
                     );
                 })}
             </div>
 
-            <div className="relative w-full group">
-                {/* Botões de Scroll */}
-                <button
-                    onClick={() => scroll('left')}
-                    className="hidden md:flex absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white shadow-md p-1 rounded-full border border-slate-100 hover:bg-slate-50 text-slate-400"
-                >
-                    <ChevronLeft size={20} />
-                </button>
-
-                <button
-                    onClick={() => scroll('right')}
-                    className="hidden md:flex absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-white shadow-md p-1 rounded-full border border-slate-100 hover:bg-slate-50 text-slate-400"
-                >
-                    <ChevronRight size={20} />
-                </button>
-
-                {/* Lista Horizontal de Dias */}
-                <div
-                    ref={scrollRef}
-                    className="flex gap-3 overflow-x-auto scrollbar-hide px-1 py-4 snap-x snap-mandatory"
-                >
-                    {days.length === 0 ? (
-                        <div className="w-full text-center py-4 text-slate-400 text-sm italic">
-                            Sem datas disponíveis para este mês.
-                        </div>
-                    ) : (
-                        days.map((date) => {
-                            const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
-
-                            return (
-                                <button
-                                    key={date.toISOString()}
-                                    onClick={() => onSelect(date)}
-                                    className={cn(
-                                        "flex-shrink-0 flex flex-col items-center justify-center w-16 h-20 rounded-2xl border transition-all snap-start",
-                                        isSelected
-                                            ? "bg-primary border-primary text-white shadow-lg shadow-yellow-500/20 transform scale-105"
-                                            : "bg-white border-slate-100 text-slate-500 hover:border-primary/50"
-                                    )}
-                                >
-                                    <span className="text-[10px] font-bold uppercase opacity-70">
-                                        {isToday(date) ? 'Hoje' : format(date, 'EEE', { locale: ptBR }).slice(0, 3)}
-                                    </span>
-                                    <span className={cn("text-2xl font-black font-sans mt-0.5", isSelected ? "text-white" : "text-slate-800")}>
-                                        {format(date, 'd')}
-                                    </span>
-                                </button>
-                            );
-                        })
-                    )}
-                </div>
+            {/* Legend */}
+            <div className="flex items-center justify-center gap-4 pt-2 text-[10px] text-slate-400 uppercase font-bold">
+                <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded bg-primary"></span> Selecionado
+                </span>
+                <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded bg-slate-100 border border-slate-200"></span> Fechado
+                </span>
             </div>
         </div>
     );
