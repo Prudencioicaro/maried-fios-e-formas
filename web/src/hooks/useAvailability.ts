@@ -8,7 +8,7 @@ const SLOT_INTERVAL = 30; // Minutos
 
 export type UnavailableReason = 'blocked' | 'full' | 'closed' | null;
 
-export function useAvailability(selectedDate: Date | null, durationMinutes: number) {
+export function useAvailability(selectedDate: Date | null, durationMinutes: number, procedureName?: string) {
     const [availableSlots, setAvailableSlots] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     const [unavailableReason, setUnavailableReason] = useState<UnavailableReason>(null);
@@ -74,7 +74,11 @@ export function useAvailability(selectedDate: Date | null, durationMinutes: numb
                 // 5. Gera todos os slots possíveis do dia
                 const slots: string[] = [];
                 let currentSlot = setMinutes(setHours(startDay, OPEN_HOUR), 0);
-                const lastPossibleStart = setMinutes(setHours(startDay, LAST_START_HOUR), 1);
+
+                // Regra personalizada: Mechas só podem iniciar ATÉ as 17:00
+                const isMechas = procedureName?.toLowerCase().includes('mechas');
+                const limitHour = isMechas ? 17 : LAST_START_HOUR;
+                const lastPossibleStart = setMinutes(setHours(startDay, limitHour), 1);
 
                 let hasAnyBlockedSlot = false;
                 let hasAnyOccupiedSlot = false;
@@ -142,7 +146,7 @@ export function useAvailability(selectedDate: Date | null, durationMinutes: numb
         }
 
         checkAvailability();
-    }, [selectedDate, durationMinutes]);
+    }, [selectedDate, durationMinutes, procedureName]);
 
     return { availableSlots, loading, unavailableReason };
 }

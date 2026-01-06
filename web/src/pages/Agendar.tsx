@@ -51,7 +51,7 @@ export default function Agendar() {
     const timeSlotsRef = useRef<HTMLDivElement>(null);
 
     const duration = selectedProcedure?.duration_minutes || 0;
-    const { availableSlots, loading: loadingSlots, unavailableReason } = useAvailability(selectedDate, duration);
+    const { availableSlots, loading: loadingSlots, unavailableReason } = useAvailability(selectedDate, duration, selectedProcedure?.name);
 
     // Handle procedure selection with auto-scroll
     const handleProcedureSelect = (proc: Procedure) => {
