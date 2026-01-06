@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Loader2, Calendar as CalendarIcon } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Calendar as CalendarIcon, Info, CreditCard } from 'lucide-react';
 import { format, addMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -99,7 +99,8 @@ export default function Agendar() {
             // 3. Construct message for WhatsApp - IMMEDIATE & iPhone Safe
             const siteUrl = window.location.origin;
             const manageLink = `${siteUrl}/admin?view=requests`;
-            const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}\n\nGerenciar solicitações: ${manageLink}`;
+            const paymentTerms = `\n\n*OPCOES DE PAGAMENTO:*\n💳 Crédito/Débito à vista\n💳 Parcelado: +10% acréscimo\n💵 *DINHEIRO: -10% DESCONTO*`;
+            const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}${paymentTerms}\n\nGerenciar solicitações: ${manageLink}`;
             const url = `https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`;
 
             // Automatic redirection - IMMEDIATE for iPhone compatibility
@@ -458,8 +459,43 @@ export default function Agendar() {
                                         )}
                                     </Button>
 
-                                    <p className="text-center text-xs text-slate-500 mt-4 uppercase tracking-wider">
-                                        Pagamento no local após o atendimento
+                                    <div className="mt-8 p-6 rounded-[2rem] bg-slate-900/50 border border-slate-800 space-y-4 animate-in fade-in slide-in-from-top-4 duration-700">
+                                        <div className="flex items-center gap-3 text-amber-400">
+                                            <Info size={18} />
+                                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em]">Regras de Pagamento</h4>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                                                <div className="flex items-center gap-2">
+                                                    <CreditCard size={14} />
+                                                    <span>Crédito/Débito à vista</span>
+                                                </div>
+                                                <span className="text-white">Valor normal</span>
+                                            </div>
+
+                                            <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                                                <div className="flex items-center gap-2">
+                                                    <CreditCard size={14} />
+                                                    <span>Crédito Parcelado</span>
+                                                </div>
+                                                <span className="text-white">+10% acréscimo</span>
+                                            </div>
+
+                                            <div className="mt-4 p-4 rounded-2xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-between group">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Melhor Opção</span>
+                                                    <span className="text-sm font-black text-amber-400 uppercase italic">Pagamento em Dinheiro</span>
+                                                </div>
+                                                <div className="bg-amber-400 text-slate-900 px-3 py-1.5 rounded-lg font-black text-xs shadow-lg shadow-amber-500/20">
+                                                    -10% OFF
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-center text-[10px] font-black text-slate-600 mt-6 uppercase tracking-[0.2em]">
+                                        O pagamento é realizado após o atendimento
                                     </p>
                                 </div>
                             </>
