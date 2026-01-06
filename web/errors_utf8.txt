@@ -1,0 +1,2 @@
+src/components/ManualAppointmentModal.tsx(7,1): error TS6133: 'cn' is declared but its value is never read.
+src/pages/Dashboard.tsx(1002,59): error TS6133: 'totalMinutes' is declared but its value is never read.

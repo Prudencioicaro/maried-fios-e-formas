@@ -174,8 +174,6 @@ export default function Dashboard() {
     };
 
     useEffect(() => {
-        loadData();
-
         // 1. Detect 'confirm' or 'view' parameter from URL ONLY ONCE
         const params = new URLSearchParams(window.location.search);
         const confirmId = params.get('confirm');
@@ -202,7 +200,7 @@ export default function Dashboard() {
         };
     }, []); // Only run once on mount
 
-    // Separate effect for data loading on filter/view changes
+    // Separate effect for data loading on filter/view changes (also runs on mount)
     useEffect(() => {
         loadData();
     }, [dateFilter, customDate, agendaDate, view]);
@@ -999,7 +997,6 @@ export default function Dashboard() {
                                                     const appEnd = new Date(app.end_time);
                                                     const startMinutes = appStart.getHours() * 60 + appStart.getMinutes();
                                                     const endMinutes = appEnd.getHours() * 60 + appEnd.getMinutes();
-                                                    const totalMinutes = endMinutes - startMinutes;
 
                                                     const minutesOffset = (startMinutes / 60 - START_HOUR) * HOUR_HEIGHT;
 
@@ -1225,64 +1222,109 @@ export default function Dashboard() {
                     <div className="space-y-12 relative z-10">
                         <div className="flex flex-col md:flex-row gap-12">
                             {/* New Blockage Form */}
-                            <div className="flex-1 bg-slate-900/40 backdrop-blur-xl p-10 rounded-[3rem] border border-slate-800">
-                                <h4 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-8 flex items-center gap-3">
-                                    <Calendar className="text-amber-400" size={24} style={{ color: '#fbbf24' }} /> Bloquear Período
-                                </h4>
+                            <div className="flex-1 space-y-8">
+                                <div className="bg-slate-900/40 backdrop-blur-xl p-10 rounded-[3rem] border border-slate-800">
+                                    <h4 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-8 flex items-center gap-3">
+                                        <Calendar className="text-amber-400" size={24} style={{ color: '#fbbf24' }} /> Bloquear Data Única
+                                    </h4>
 
-                                <form onSubmit={(e) => {
-                                    e.preventDefault();
-                                    const fd = new FormData(e.currentTarget);
-                                    const startValue = fd.get('start') as string;
-                                    const endValue = fd.get('end') as string;
+                                    <form onSubmit={(e) => {
+                                        e.preventDefault();
+                                        const fd = new FormData(e.currentTarget);
+                                        const startValue = fd.get('start') as string;
+                                        const endValue = fd.get('end') as string;
 
-                                    // Convert datetime-local to ISO format
-                                    const startTime = new Date(startValue).toISOString();
-                                    const endTime = new Date(endValue).toISOString();
+                                        const startTime = new Date(startValue).toISOString();
+                                        const endTime = new Date(endValue).toISOString();
 
-                                    handleSaveBlockage({
-                                        start_time: startTime,
-                                        end_time: endTime,
-                                        reason: fd.get('reason') || ''
-                                    });
-                                    (e.target as HTMLFormElement).reset();
-                                }} className="space-y-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Início do Bloqueio</label>
-                                            <input name="start" type="datetime-local" required className="w-full h-16 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white font-black focus:ring-2 focus:ring-amber-400/20" />
+                                        handleSaveBlockage({
+                                            start_time: startTime,
+                                            end_time: endTime,
+                                            reason: fd.get('reason') || ''
+                                        });
+                                        (e.target as HTMLFormElement).reset();
+                                    }} className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-3">
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Início</label>
+                                                <input name="start" type="datetime-local" required className="w-full h-16 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white font-black focus:ring-2 focus:ring-amber-400/20" />
+                                            </div>
+                                            <div className="space-y-3">
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Término</label>
+                                                <input name="end" type="datetime-local" required className="w-full h-16 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white font-black focus:ring-2 focus:ring-amber-400/20" />
+                                            </div>
                                         </div>
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Término do Bloqueio</label>
-                                            <input name="end" type="datetime-local" required className="w-full h-16 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white font-black focus:ring-2 focus:ring-amber-400/20" />
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Motivo</label>
+                                            <input name="reason" type="text" placeholder="Ex: Férias, Médico..." className="w-full h-16 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white font-bold placeholder:text-slate-800 focus:ring-2 focus:ring-amber-400/20" />
                                         </div>
+                                        <button type="submit" className="w-full h-16 bg-amber-400 hover:bg-amber-500 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all">
+                                            Efetuar Bloqueio Pontual
+                                        </button>
+                                    </form>
+                                </div>
+
+                                {/* Recurring Blockage Form */}
+                                <div className="bg-slate-900/40 backdrop-blur-xl p-10 rounded-[3rem] border border-slate-800">
+                                    <h4 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-8 flex items-center gap-3">
+                                        <Clock className="text-amber-400" size={24} style={{ color: '#fbbf24' }} /> Folga Recorrente
+                                    </h4>
+                                    <p className="text-slate-500 text-xs font-bold uppercase mb-6">Bloqueie um dia da semana permanentemente</p>
+
+                                    <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                                        {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].map((day, idx) => {
+                                            const isBlocked = blockages.some(b => b.day_of_week === idx);
+                                            return (
+                                                <button
+                                                    key={day}
+                                                    onClick={() => {
+                                                        if (isBlocked) {
+                                                            const block = blockages.find(b => b.day_of_week === idx);
+                                                            if (block) handleDeleteBlockage(block.id);
+                                                        } else {
+                                                            handleSaveBlockage({
+                                                                day_of_week: idx,
+                                                                reason: `Folga Recorrente (${day})`
+                                                            });
+                                                        }
+                                                    }}
+                                                    className={cn(
+                                                        "h-12 rounded-xl text-[10px] font-black uppercase transition-all border",
+                                                        isBlocked
+                                                            ? "bg-amber-400 text-slate-900 border-amber-500 shadow-lg shadow-amber-500/10"
+                                                            : "bg-slate-950 text-slate-500 border-slate-800 hover:border-slate-700"
+                                                    )}
+                                                >
+                                                    {day}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Motivo (Ficará visível para você)</label>
-                                        <input name="reason" type="text" placeholder="Ex: Férias, Médico, Curso..." className="w-full h-16 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white font-bold placeholder:text-slate-800 focus:ring-2 focus:ring-amber-400/20" />
-                                    </div>
-                                    <button type="submit" className="w-full h-16 bg-amber-400 hover:bg-amber-500 text-slate-900 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all">
-                                        Efetuar Bloqueio de Horário
-                                    </button>
-                                </form>
+                                </div>
                             </div>
 
                             {/* Active Blockages List */}
                             <div className="w-full md:w-[400px] space-y-6">
                                 <h5 className="text-xl font-black text-white italic uppercase tracking-tighter">Bloqueios Ativos</h5>
                                 <div className="space-y-4">
-                                    {blockages.filter(b => new Date(b.end_time) > new Date()).length === 0 ? (
+                                    {blockages.length === 0 ? (
                                         <div className="p-10 rounded-[2.5rem] border-2 border-dashed border-slate-800 text-center text-slate-600">
                                             <p className="font-bold text-xs uppercase tracking-widest">Nenhum bloqueio futuro</p>
                                         </div>
                                     ) : (
-                                        blockages.filter(b => new Date(b.end_time) > new Date()).map(b => (
+                                        blockages.map(b => (
                                             <div key={b.id} className="p-6 bg-slate-900/60 border border-slate-800 rounded-3xl flex justify-between items-center group">
                                                 <div>
                                                     <p className="text-white font-black text-sm uppercase italic mb-1">{b.reason || "Sem Motivo"}</p>
                                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-relaxed">
-                                                        {format(new Date(b.start_time), "dd/MM 'às' HH:mm")} até<br />
-                                                        {format(new Date(b.end_time), "dd/MM 'às' HH:mm")}
+                                                        {b.day_of_week !== null && b.day_of_week !== undefined ? (
+                                                            <span className="text-amber-400">Toda {['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][b.day_of_week]}</span>
+                                                        ) : (
+                                                            <>
+                                                                {format(new Date(b.start_time), "dd/MM 'às' HH:mm")} até<br />
+                                                                {format(new Date(b.end_time), "dd/MM 'às' HH:mm")}
+                                                            </>
+                                                        )}
                                                     </p>
                                                 </div>
                                                 <button

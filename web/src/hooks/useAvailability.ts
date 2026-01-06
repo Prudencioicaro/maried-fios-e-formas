@@ -20,14 +20,8 @@ export function useAvailability(selectedDate: Date | null, durationMinutes: numb
                 return;
             }
 
-            // Bloqueio de Domingo (0) e Segunda (1)
+            // Base day of week
             const dayOfWeek = selectedDate.getDay();
-            if (dayOfWeek === 0 || dayOfWeek === 1) {
-                setAvailableSlots([]);
-                setUnavailableReason('closed');
-                return;
-            }
-
             setLoading(true);
             setUnavailableReason(null);
 
@@ -46,12 +40,11 @@ export function useAvailability(selectedDate: Date | null, durationMinutes: numb
 
                 if (appError) throw appError;
 
-                // 3. Busca bloqueios que afetam o dia
+                // 3. Busca bloqueios que afetam o dia (normais e recorrentes)
                 const { data: blockages, error: blockError } = await supabase
                     .from('blocked_slots')
-                    .select('start_time, end_time')
-                    .lte('start_time', endDay.toISOString())
-                    .gte('end_time', startDay.toISOString());
+                    .select('start_time, end_time, day_of_week')
+                    .or(`and(start_time.lte.${endDay.toISOString()},end_time.gte.${startDay.toISOString()}),day_of_week.eq.${dayOfWeek}`);
 
                 if (blockError) {
                     console.warn('Erro ao buscar bloqueios:', blockError);
@@ -62,11 +55,21 @@ export function useAvailability(selectedDate: Date | null, durationMinutes: numb
                 const workEnd = setMinutes(setHours(startDay, LAST_START_HOUR), 0);
 
                 const hasFullDayBlock = blockages?.some(block => {
+                    if (block.day_of_week !== null && block.day_of_week !== undefined) {
+                        return block.day_of_week === dayOfWeek;
+                    }
                     const blockStart = new Date(block.start_time);
                     const blockEnd = new Date(block.end_time);
                     // Bloqueio cobre todo o expediente se começa antes ou no início E termina depois ou no fim
                     return blockStart <= workStart && blockEnd >= workEnd;
                 });
+
+                if (hasFullDayBlock) {
+                    setAvailableSlots([]);
+                    setUnavailableReason('blocked');
+                    setLoading(false);
+                    return;
+                }
 
                 // 5. Gera todos os slots possíveis do dia
                 const slots: string[] = [];

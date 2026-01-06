@@ -11,8 +11,10 @@ interface DateSelectorProps {
 }
 
 interface Blockage {
+    id?: string;
     start_time: string;
     end_time: string;
+    day_of_week?: number | null;
 }
 
 const OPEN_HOUR = 10;
@@ -33,9 +35,8 @@ export function DateSelector({ selectedDate, onSelect }: DateSelectorProps) {
 
             const { data, error } = await supabase
                 .from('blocked_slots')
-                .select('start_time, end_time')
-                .lte('start_time', monthEnd.toISOString())
-                .gte('end_time', monthStart.toISOString());
+                .select('start_time, end_time, day_of_week')
+                .or(`and(start_time.lte.${monthEnd.toISOString()},end_time.gte.${monthStart.toISOString()}),day_of_week.not.is.null`);
 
             if (error) {
                 console.warn('Erro ao buscar bloqueios:', error);
@@ -54,6 +55,9 @@ export function DateSelector({ selectedDate, onSelect }: DateSelectorProps) {
         const workEnd = setMinutes(setHours(date, CLOSE_HOUR), 0);
 
         return blockages.some(block => {
+            if (block.day_of_week !== null && block.day_of_week !== undefined) {
+                return block.day_of_week === date.getDay();
+            }
             const blockStart = new Date(block.start_time);
             const blockEnd = new Date(block.end_time);
             // Blockage covers the full day if it starts at or before work start AND ends at or after work end
@@ -73,10 +77,8 @@ export function DateSelector({ selectedDate, onSelect }: DateSelectorProps) {
     const isAvailable = (date: Date) => {
         const isCurrentMonth = getMonth(date) === getMonth(activeMonth);
         const isNotPast = isSameDay(date, today) || isAfter(date, today);
-        const dayOfWeek = date.getDay();
-        const isWorkingDay = dayOfWeek !== 0 && dayOfWeek !== 1; // 0=Sunday, 1=Monday
         const isNotBlocked = !isDayFullyBlocked(date);
-        return isCurrentMonth && isNotPast && isWorkingDay && isNotBlocked;
+        return isCurrentMonth && isNotPast && isNotBlocked;
     };
 
     const navigateMonth = (direction: 'prev' | 'next') => {
@@ -122,10 +124,7 @@ export function DateSelector({ selectedDate, onSelect }: DateSelectorProps) {
                 {weekDays.map((day, i) => (
                     <div
                         key={day}
-                        className={cn(
-                            "text-center text-xs font-bold uppercase py-2",
-                            i === 0 || i === 1 ? "text-slate-300" : "text-slate-500"
-                        )}
+                        className="text-center text-xs font-bold uppercase py-2 text-slate-500"
                     >
                         {day}
                     </div>
@@ -139,9 +138,7 @@ export function DateSelector({ selectedDate, onSelect }: DateSelectorProps) {
                     const isSelected = selectedDate ? isSameDay(date, selectedDate) : false;
                     const available = isAvailable(date);
                     const isPast = !isSameDay(date, today) && isBefore(date, today);
-                    const dayOfWeek = date.getDay();
-                    const isClosedDay = dayOfWeek === 0 || dayOfWeek === 1;
-                    const isBlocked = isCurrentMonth && !isPast && !isClosedDay && isDayFullyBlocked(date);
+                    const isBlocked = isCurrentMonth && !isPast && isDayFullyBlocked(date);
 
                     return (
                         <button
@@ -158,8 +155,8 @@ export function DateSelector({ selectedDate, onSelect }: DateSelectorProps) {
                                 available && !isSelected && "bg-white border border-slate-100 text-slate-800 hover:border-primary hover:shadow-md",
                                 // Past day
                                 isCurrentMonth && isPast && "bg-slate-50 text-slate-300 cursor-not-allowed",
-                                // Closed day (Sunday/Monday) OR Fully blocked day
-                                isCurrentMonth && !isPast && (isClosedDay || isBlocked) && "bg-slate-50 text-slate-300 cursor-not-allowed",
+                                // Fully blocked day
+                                isCurrentMonth && !isPast && isBlocked && "bg-slate-50 text-slate-300 cursor-not-allowed",
                             )}
                         >
                             <span className={cn(
