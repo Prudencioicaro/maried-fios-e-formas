@@ -4,7 +4,6 @@ import type { Procedure } from '../types/database';
 import { Button } from './ui/Button';
 import { X, Calendar as CalendarIcon, Clock, User, Check } from 'lucide-react';
 import { format, addMinutes } from 'date-fns';
-import { cn } from '../lib/utils';
 
 interface Props {
     onClose: () => void;
@@ -33,28 +32,35 @@ export function ManualAppointmentModal({ onClose, onSuccess, initialDate, initia
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedProcedureId || !clientName) return;
 
         setIsSubmitting(true);
         try {
-            const proc = procedures.find(p => p.id === selectedProcedureId);
-            if (!proc) return;
+            const finalClientName = clientName.trim() || 'Cliente Manual';
+            const finalDate = date || format(new Date(), 'yyyy-MM-dd');
+            const finalTime = time || format(new Date(), 'HH:mm');
 
-            const startTime = new Date(`${date}T${time}`);
-            const endTime = addMinutes(startTime, proc.duration_minutes);
+            const proc = selectedProcedureId ? procedures.find(p => p.id === selectedProcedureId) : null;
+            const duration = proc?.duration_minutes || 60; // Default to 60 min if no procedure selected
+
+            // Robust date parsing for compatibility (especially Safari/iPhone)
+            const [year, month, day] = finalDate.split('-').map(Number);
+            const [hours, minutes] = finalTime.split(':').map(Number);
+            const startTime = new Date(year, month - 1, day, hours, minutes);
+            const endTime = addMinutes(startTime, duration);
 
             const { error } = await supabase.from('appointments').insert({
-                client_name: clientName,
+                client_name: finalClientName,
                 client_phone: clientPhone || 'Manual',
                 start_time: startTime.toISOString(),
                 end_time: endTime.toISOString(),
                 status: 'confirmed',
-                procedure_id: selectedProcedureId,
+                procedure_id: selectedProcedureId || null,
             });
 
             if (error) throw error;
             onSuccess();
         } catch (err) {
+            console.error(err);
             alert('Erro ao criar agendamento manual');
         } finally {
             setIsSubmitting(false);
@@ -82,9 +88,8 @@ export function ManualAppointmentModal({ onClose, onSuccess, initialDate, initia
                                 <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                                 <input
                                     type="text"
-                                    required
                                     className="w-full h-14 pl-12 pr-6 rounded-2xl bg-slate-950 border border-slate-800 text-white font-bold focus:ring-2 focus:ring-amber-400/20 outline-none"
-                                    placeholder="Nome da cliente"
+                                    placeholder="Nome da cliente (Opcional)"
                                     value={clientName}
                                     onChange={e => setClientName(e.target.value)}
                                 />
@@ -103,9 +108,8 @@ export function ManualAppointmentModal({ onClose, onSuccess, initialDate, initia
                         </div>
 
                         <div className="md:col-span-2 space-y-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Procedimento</label>
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Procedimento (Opcional)</label>
                             <select
-                                required
                                 className="w-full h-14 px-6 rounded-2xl bg-slate-950 border border-slate-800 text-white font-bold focus:ring-2 focus:ring-amber-400/20 outline-none appearance-none"
                                 value={selectedProcedureId}
                                 onChange={e => setSelectedProcedureId(e.target.value)}
@@ -123,7 +127,6 @@ export function ManualAppointmentModal({ onClose, onSuccess, initialDate, initia
                                 <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                                 <input
                                     type="date"
-                                    required
                                     className="w-full h-14 pl-12 pr-6 rounded-2xl bg-slate-950 border border-slate-800 text-white font-bold focus:ring-2 focus:ring-amber-400/20 outline-none"
                                     value={date}
                                     onChange={e => setDate(e.target.value)}
@@ -137,7 +140,6 @@ export function ManualAppointmentModal({ onClose, onSuccess, initialDate, initia
                                 <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                                 <input
                                     type="time"
-                                    required
                                     className="w-full h-14 pl-12 pr-6 rounded-2xl bg-slate-950 border border-slate-800 text-white font-bold focus:ring-2 focus:ring-amber-400/20 outline-none"
                                     value={time}
                                     onChange={e => setTime(e.target.value)}

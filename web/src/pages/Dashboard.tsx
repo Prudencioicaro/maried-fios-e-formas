@@ -234,37 +234,47 @@ export default function Dashboard() {
         }
     };
 
-    const handleAdjust = async (appointment: Appointment, newStartTime: string, newProcedureId?: string) => {
+    const handleUpdateAppointment = async (appointment: Appointment, updates: { startTime: string, procedureId?: string, clientName?: string, clientPhone?: string }) => {
         try {
-            // If a new procedure is selected, get its duration, otherwise use the current one
-            const newProcedure = newProcedureId ? procedures.find(p => p.id === newProcedureId) : null;
-            const procedure = newProcedure || appointment.procedure;
+            const { startTime, procedureId, clientName, clientPhone } = updates;
+
+            // Handle date parsing robustly
+            const dateObj = new Date(startTime);
+            const start = isNaN(dateObj.getTime()) ? new Date(appointment.start_time) : dateObj;
+
+            const procedure = procedureId ? procedures.find(p => p.id === procedureId) : appointment.procedure;
             const duration = procedure?.duration_minutes || 30;
-            const start = new Date(newStartTime);
             const end = new Date(start.getTime() + duration * 60000);
 
             const updateData: any = {
                 start_time: start.toISOString(),
                 end_time: end.toISOString(),
-                status: 'confirmed'
+                status: 'confirmed',
+                client_name: clientName || appointment.client_name,
+                client_phone: clientPhone || appointment.client_phone
             };
 
-            // Only update procedure_id if a new one was selected
-            if (newProcedureId && newProcedureId !== appointment.procedure_id) {
-                updateData.procedure_id = newProcedureId;
+            if (procedureId) {
+                updateData.procedure_id = procedureId;
             }
 
-            triggerConfetti();
-            const day = format(start, "dd/MM");
-            const hour = format(start, "HH:mm");
-            sendWhatsAppConfirmation(
-                appointment.client_phone,
-                appointment.client_name,
-                procedure?.name || '',
-                day,
-                hour,
-                true
-            );
+            // Only notify if time or procedure changed substantially
+            const timeChanged = format(new Date(appointment.start_time), 'HH:mm') !== format(start, 'HH:mm');
+            const dateChanged = format(new Date(appointment.start_time), 'dd/MM') !== format(start, 'dd/MM');
+
+            if (timeChanged || dateChanged) {
+                triggerConfetti();
+                const day = format(start, "dd/MM");
+                const hour = format(start, "HH:mm");
+                sendWhatsAppConfirmation(
+                    updateData.client_phone,
+                    updateData.client_name,
+                    procedure?.name || '',
+                    day,
+                    hour,
+                    true
+                );
+            }
 
             const { error } = await supabase
                 .from('appointments')
@@ -276,7 +286,25 @@ export default function Dashboard() {
             setEditingAppointment(null);
             loadData();
         } catch (err) {
-            alert('Erro ao ajustar agendamento');
+            alert('Erro ao atualizar agendamento');
+        }
+    };
+
+    const handleDeleteAppointment = async (id: string) => {
+        if (!confirm('Tem certeza que deseja excluir este agendamento permanentemente?')) return;
+
+        try {
+            const { error } = await supabase
+                .from('appointments')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            setEditingAppointment(null);
+            loadData();
+        } catch (err) {
+            alert('Erro ao excluir agendamento');
         }
     };
 
@@ -767,7 +795,11 @@ export default function Dashboard() {
                                     <h4 className="text-xl font-bold text-white mb-6">Próximos Agendamentos</h4>
                                     <div className="space-y-3">
                                         {appointments.filter(a => a.status === 'confirmed').slice(0, 5).map(app => (
-                                            <div key={app.id} className="flex items-center justify-between p-4 hover:bg-slate-800/50 rounded-2xl transition-all border border-transparent hover:border-slate-800">
+                                            <div
+                                                key={app.id}
+                                                onClick={() => setEditingAppointment(app)}
+                                                className="flex items-center justify-between p-4 hover:bg-slate-800/50 rounded-2xl transition-all border border-transparent hover:border-slate-800 cursor-pointer"
+                                            >
                                                 <div className="flex gap-4 items-center">
                                                     <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-amber-400 border border-slate-700 font-black text-xs uppercase shadow-lg">
                                                         {app.client_name[0]}
@@ -996,8 +1028,6 @@ export default function Dashboard() {
                                                     const appStart = new Date(app.start_time);
                                                     const appEnd = new Date(app.end_time);
                                                     const startMinutes = appStart.getHours() * 60 + appStart.getMinutes();
-                                                    const endMinutes = appEnd.getHours() * 60 + appEnd.getMinutes();
-
                                                     const minutesOffset = (startMinutes / 60 - START_HOUR) * HOUR_HEIGHT;
 
                                                     // Render appointment card
@@ -1519,7 +1549,11 @@ export default function Dashboard() {
                                             </tr>
                                         ) : (
                                             filteredAppointments.map(app => (
-                                                <tr key={app.id} className="group hover:bg-slate-800/30 transition-colors">
+                                                <tr
+                                                    key={app.id}
+                                                    onClick={() => setEditingAppointment(app)}
+                                                    className="group hover:bg-slate-800/30 transition-colors cursor-pointer"
+                                                >
                                                     <td className="py-4 pl-4">
                                                         <div className="font-bold text-white tracking-widest leading-none mb-1">{format(new Date(app.start_time), 'dd/MM/yy')}</div>
                                                         <div className="text-[10px] font-black text-slate-500 uppercase">{format(new Date(app.start_time), 'HH:mm')}</div>
@@ -1558,7 +1592,11 @@ export default function Dashboard() {
                                     </div>
                                 ) : (
                                     filteredAppointments.map(app => (
-                                        <div key={app.id} className="p-5 bg-slate-950/40 border border-slate-800 rounded-2xl space-y-4">
+                                        <div
+                                            key={app.id}
+                                            onClick={() => setEditingAppointment(app)}
+                                            className="p-5 bg-slate-950/40 border border-slate-800 rounded-2xl space-y-4 cursor-pointer hover:border-amber-400/20 transition-all"
+                                        >
                                             <div className="flex justify-between items-start">
                                                 <div className="space-y-1">
                                                     <div className="font-black text-white text-sm uppercase leading-tight">{app.client_name}</div>
@@ -1598,16 +1636,31 @@ export default function Dashboard() {
                 <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-300">
                     <div className="bg-slate-900 border-t sm:border border-slate-800 rounded-t-[2.5rem] sm:rounded-[3rem] w-full max-w-md p-8 sm:p-10 animate-in slide-in-from-bottom sm:zoom-in duration-300 shadow-2xl">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Ajustar Horário</h3>
+                            <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Gerenciar Agendamento</h3>
                             <button onClick={() => setEditingAppointment(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
                                 <X className="text-slate-400" />
                             </button>
                         </div>
 
-                        <div className="space-y-6">
-                            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Cliente</p>
-                                <p className="text-lg font-bold text-white">{editingAppointment.client_name}</p>
+                        <div className="space-y-5 overflow-y-auto max-h-[70vh] pr-2 scrollbar-hide py-2">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest ml-1">Cliente</label>
+                                <input
+                                    id="edit-name-input"
+                                    type="text"
+                                    defaultValue={editingAppointment.client_name}
+                                    className="w-full h-14 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white font-bold focus:ring-2 focus:ring-amber-400/20"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest ml-1">Telefone</label>
+                                <input
+                                    id="edit-phone-input"
+                                    type="tel"
+                                    defaultValue={editingAppointment.client_phone}
+                                    className="w-full h-14 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white font-bold focus:ring-2 focus:ring-amber-400/20"
+                                />
                             </div>
 
                             <div className="space-y-2">
@@ -1624,7 +1677,7 @@ export default function Dashboard() {
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest ml-1">Novo Horário</label>
+                                <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest ml-1">Data e Horário</label>
                                 <input
                                     type="datetime-local"
                                     className="w-full h-14 bg-slate-950 border border-slate-800 rounded-2xl px-6 text-white text-lg font-bold focus:ring-2 focus:ring-amber-400/20"
@@ -1633,17 +1686,31 @@ export default function Dashboard() {
                                 />
                             </div>
 
-                            <div className="flex gap-3 pt-4 pb-safe">
+                            <div className="flex flex-col gap-3 pt-4 pb-safe">
                                 <Button
                                     onClick={() => {
+                                        const clientName = (document.getElementById('edit-name-input') as HTMLInputElement).value;
+                                        const clientPhone = (document.getElementById('edit-phone-input') as HTMLInputElement).value;
                                         const newProcId = (document.getElementById('new-procedure-input') as HTMLSelectElement).value;
                                         const newTime = (document.getElementById('new-time-input') as HTMLInputElement).value;
-                                        handleAdjust(editingAppointment, newTime, newProcId);
+                                        handleUpdateAppointment(editingAppointment, {
+                                            startTime: newTime,
+                                            procedureId: newProcId,
+                                            clientName,
+                                            clientPhone
+                                        });
                                     }}
-                                    className="flex-1 h-16 rounded-2xl bg-amber-400 text-slate-900 font-black text-lg hover:bg-amber-500 transition-all shadow-lg shadow-amber-500/10"
+                                    className="w-full h-16 rounded-2xl bg-amber-400 text-slate-900 font-black text-lg hover:bg-amber-500 transition-all shadow-lg shadow-amber-500/10"
                                 >
-                                    Confirmar Ajuste
+                                    Salvar Alterações
                                 </Button>
+
+                                <button
+                                    onClick={() => handleDeleteAppointment(editingAppointment.id)}
+                                    className="w-full h-14 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 size={18} /> Excluir Agendamento
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1733,7 +1800,7 @@ export default function Dashboard() {
                         setSelectedSlotForNew(null);
                         loadData();
                     }}
-                    initialDate={selectedSlotForNew?.date}
+                    initialDate={selectedSlotForNew?.date || format(agendaDate, 'yyyy-MM-dd')}
                     initialTime={selectedSlotForNew?.time}
                 />
             )}
