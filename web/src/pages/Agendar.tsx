@@ -118,12 +118,14 @@ export default function Agendar() {
             const url = `https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`;
             setConfirmationUrl(url);
 
-            // Open WhatsApp in new tab
-            window.open(url, '_blank');
-
-            // Show success state
+            // Show success state and confetti
             setIsSuccess(true);
             setIsSubmitting(false);
+
+            // Automatic redirection after a short delay so they see the success message
+            setTimeout(() => {
+                window.location.href = url;
+            }, 1500);
 
         } catch (err) {
             alert('Erro ao agendar. Tente novamente.');
@@ -401,22 +403,13 @@ export default function Agendar() {
                                     Agendamento Pré-Confirmado!
                                 </h2>
                                 <p className="text-slate-300 text-lg mb-8 max-w-lg mx-auto">
-                                    O seu agendamento foi registrado! Agora você deve clicar no botão abaixo para avisar a Maried no WhatsApp e garantir sua vaga.
+                                    O seu agendamento foi registrado! Estamos te levando para o WhatsApp para garantir sua vaga com a Maried.
                                 </p>
 
                                 <div className="flex flex-col gap-3">
                                     <Button
-                                        onClick={() => window.open(confirmationUrl, '_blank')}
-                                        className="w-full h-16 rounded-2xl bg-emerald-500 text-white font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3"
-                                    >
-                                        <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WA" className="w-6 h-6 invert" />
-                                        Abrir WhatsApp Agora
-                                    </Button>
-
-                                    <Button
                                         onClick={() => navigate('/')}
-                                        variant="outline"
-                                        className="w-full h-14 rounded-2xl border-slate-700 text-slate-400 font-bold uppercase tracking-wider hover:bg-slate-800"
+                                        className="w-full h-14 rounded-2xl bg-slate-800 text-white font-bold uppercase tracking-wider hover:bg-slate-700 transition-all border border-slate-700"
                                     >
                                         Voltar ao Início
                                     </Button>

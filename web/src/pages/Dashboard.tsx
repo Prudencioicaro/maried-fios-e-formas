@@ -85,6 +85,7 @@ export default function Dashboard() {
         participation: [] as { name: string, value: number }[],
         revenuePerService: [] as { name: string, value: number }[]
     });
+    const [confirmedAppointmentId, setConfirmedAppointmentId] = useState<string | null>(null);
 
     const loadData = async () => {
         try {
@@ -216,9 +217,7 @@ export default function Dashboard() {
 
             if (status === 'confirmed') {
                 triggerConfetti();
-                const day = format(new Date(appointment.start_time), "dd/MM");
-                const hour = format(new Date(appointment.start_time), "HH:mm");
-                sendWhatsAppConfirmation(appointment.client_phone, appointment.client_name, appointment.procedure?.name || '', day, hour);
+                setConfirmedAppointmentId(appointment.id);
             }
         } catch (err) {
             alert('Erro ao atualizar status');
@@ -253,16 +252,7 @@ export default function Dashboard() {
             if (error) throw error;
 
             triggerConfetti();
-            const day = format(start, "dd/MM");
-            const hour = format(start, "HH:mm");
-            sendWhatsAppConfirmation(
-                appointment.client_phone,
-                appointment.client_name,
-                procedure?.name || '',
-                day,
-                hour,
-                true
-            );
+            setConfirmedAppointmentId(appointment.id);
             setEditingAppointment(null);
             loadData();
         } catch (err) {
@@ -1108,12 +1098,26 @@ export default function Dashboard() {
 
                                             <div className="flex flex-col gap-3">
                                                 <div className="flex flex-col gap-2">
-                                                    <button
-                                                        onClick={() => updateStatus(app, 'confirmed')}
-                                                        className="w-full min-h-[48px] py-3 px-4 bg-amber-400 hover:bg-amber-500 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20"
-                                                    >
-                                                        <Check size={18} /> Confirmar e Avisar
-                                                    </button>
+                                                    {confirmedAppointmentId === app.id ? (
+                                                        <button
+                                                            onClick={() => {
+                                                                const day = format(new Date(app.start_time), "dd/MM");
+                                                                const hour = format(new Date(app.start_time), "HH:mm");
+                                                                sendWhatsAppConfirmation(app.client_phone, app.client_name, app.procedure?.name || '', day, hour);
+                                                                setConfirmedAppointmentId(null);
+                                                            }}
+                                                            className="w-full min-h-[48px] py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20"
+                                                        >
+                                                            <Check size={18} /> Enviar WhatsApp
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => updateStatus(app, 'confirmed')}
+                                                            className="w-full min-h-[48px] py-3 px-4 bg-amber-400 hover:bg-amber-500 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20"
+                                                        >
+                                                            <Check size={18} /> Confirmar e Avisar
+                                                        </button>
+                                                    )}
                                                     <div className="flex gap-2">
                                                         <button
                                                             onClick={() => setEditingAppointment(app)}
