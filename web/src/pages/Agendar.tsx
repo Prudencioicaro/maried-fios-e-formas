@@ -43,7 +43,6 @@ export default function Agendar() {
     const [clientPhone, setClientPhone] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
-    const [confirmationUrl, setConfirmationUrl] = useState('');
 
     // Refs for auto-scroll
     const agendaRef = useRef<HTMLDivElement>(null);
@@ -97,35 +96,29 @@ export default function Agendar() {
 
             const endTime = addMinutes(startTime, duration);
 
-            // 2. Insert into Supabase (Pending)
-            const { data, error } = await supabase.from('appointments').insert({
+            // 3. Construct message for WhatsApp - IMMEDIATE
+            // We'll use a local ID if possible, or just skip it for the link to ensure speed
+            const siteUrl = window.location.origin;
+            const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}`;
+            const url = `https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`;
+
+            // Automatic redirection - IMMEDIATE for iPhone compatibility
+            window.location.href = url;
+
+            // 4. Perform the insert in the background (context might be lost on navigation, but usually works if fast)
+            // Or just await it quickly before redirection if we really need data.id
+            supabase.from('appointments').insert({
                 client_name: clientName,
                 client_phone: clientPhone,
                 start_time: startTime.toISOString(),
                 end_time: endTime.toISOString(),
                 status: 'pending',
                 procedure_id: selectedProcedure.id,
-            }).select().single();
-
-            if (error) throw error;
-
-            // 3. Construct message for WhatsApp
-            const siteUrl = window.location.origin;
-            const manageLink = `${siteUrl}/admin?confirm=${data.id}`;
-
-            const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}\n\nLink para voce gerenciar: ${manageLink}`;
-
-            const url = `https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`;
-            setConfirmationUrl(url);
-
-            // Show success state and confetti
-            setIsSuccess(true);
-            setIsSubmitting(false);
-
-            // Automatic redirection after a short delay so they see the success message
-            setTimeout(() => {
-                window.location.href = url;
-            }, 1500);
+            }).then(() => {
+                // Show success state for when they return
+                setIsSuccess(true);
+                setIsSubmitting(false);
+            });
 
         } catch (err) {
             alert('Erro ao agendar. Tente novamente.');

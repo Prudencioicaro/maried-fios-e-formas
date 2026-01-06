@@ -207,19 +207,19 @@ export default function Dashboard() {
 
     const updateStatus = async (appointment: Appointment, status: Appointment['status']) => {
         try {
-            const { error } = await supabase
-                .from('appointments')
-                .update({ status })
-                .eq('id', appointment.id);
-
-            if (error) throw error;
-
             if (status === 'confirmed') {
                 triggerConfetti();
                 const day = format(new Date(appointment.start_time), "dd/MM");
                 const hour = format(new Date(appointment.start_time), "HH:mm");
                 sendWhatsAppConfirmation(appointment.client_phone, appointment.client_name, appointment.procedure?.name || '', day, hour);
             }
+
+            const { error } = await supabase
+                .from('appointments')
+                .update({ status })
+                .eq('id', appointment.id);
+
+            if (error) throw error;
         } catch (err) {
             alert('Erro ao atualizar status');
         }
@@ -245,13 +245,6 @@ export default function Dashboard() {
                 updateData.procedure_id = newProcedureId;
             }
 
-            const { error } = await supabase
-                .from('appointments')
-                .update(updateData)
-                .eq('id', appointment.id);
-
-            if (error) throw error;
-
             triggerConfetti();
             const day = format(start, "dd/MM");
             const hour = format(start, "HH:mm");
@@ -263,6 +256,14 @@ export default function Dashboard() {
                 hour,
                 true
             );
+
+            const { error } = await supabase
+                .from('appointments')
+                .update(updateData)
+                .eq('id', appointment.id);
+
+            if (error) throw error;
+
             setEditingAppointment(null);
             loadData();
         } catch (err) {
