@@ -176,7 +176,7 @@ export default function Dashboard() {
     useEffect(() => {
         loadData();
 
-        // Detect 'confirm' or 'view' parameter from URL
+        // 1. Detect 'confirm' or 'view' parameter from URL ONLY ONCE
         const params = new URLSearchParams(window.location.search);
         const confirmId = params.get('confirm');
         const viewParam = params.get('view');
@@ -184,6 +184,10 @@ export default function Dashboard() {
         if (confirmId || viewParam === 'requests') {
             setView('requests');
             setDateFilter('all');
+
+            // 2. Clean URL so navigation is free again
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
         }
 
         // Realtime subscription
@@ -196,6 +200,11 @@ export default function Dashboard() {
         return () => {
             supabase.removeChannel(channel);
         };
+    }, []); // Only run once on mount
+
+    // Separate effect for data loading on filter/view changes
+    useEffect(() => {
+        loadData();
     }, [dateFilter, customDate, agendaDate, view]);
 
     const filteredAppointments = appointments.filter(app =>
