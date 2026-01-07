@@ -121,7 +121,7 @@ export function DateSelector({ selectedDate, onSelect }: DateSelectorProps) {
 
             {/* Weekday Headers */}
             <div className="grid grid-cols-7 gap-1">
-                {weekDays.map((day, i) => (
+                {weekDays.map((day) => (
                     <div
                         key={day}
                         className="text-center text-xs font-bold uppercase py-2 text-slate-500"

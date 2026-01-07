@@ -97,30 +97,35 @@ export default function Agendar() {
 
             const endTime = addMinutes(startTime, duration);
 
-            // 3. Construct message for WhatsApp - IMMEDIATE & iPhone Safe
-            const siteUrl = window.location.origin;
-            const manageLink = `${siteUrl}/admin?view=requests`;
-            const paymentTerms = `\n\n*OPCOES DE PAGAMENTO:*\n💳 Crédito/Débito à vista\n💳 Parcelado: +10% acréscimo\n💵 *DINHEIRO: -10% DESCONTO*`;
-            const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}${paymentTerms}\n\nGerenciar solicitações: ${manageLink}`;
-            const url = `https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`;
-
-            // Automatic redirection - IMMEDIATE for iPhone compatibility
-            window.location.href = url;
-
-            // 4. Perform the insert in the background (context might be lost on navigation, but usually works if fast)
-            // Or just await it quickly before redirection if we really need data.id
-            supabase.from('appointments').insert({
+            // 2. PRIMEIRO: Salvar no banco (AGUARDAR antes de redirecionar)
+            const { error } = await supabase.from('appointments').insert({
                 client_name: clientName,
                 client_phone: clientPhone,
                 start_time: startTime.toISOString(),
                 end_time: endTime.toISOString(),
                 status: 'pending',
                 procedure_id: selectedProcedure.id,
-            }).then(() => {
-                // Show success state for when they return
-                setIsSuccess(true);
-                setIsSubmitting(false);
             });
+
+            if (error) {
+                console.error('Erro ao salvar agendamento:', error);
+                alert('Erro ao registrar agendamento. Por favor, tente novamente.');
+                setIsSubmitting(false);
+                return;
+            }
+
+            // 3. Marcar sucesso ANTES de redirecionar
+            setIsSuccess(true);
+
+            // 4. DEPOIS: Construir e redirecionar para WhatsApp (só após salvar com sucesso)
+            const siteUrl = window.location.origin;
+            const manageLink = `${siteUrl}/admin?view=requests`;
+            const paymentTerms = `\n\n*OPCOES DE PAGAMENTO:*\n💳 Crédito/Débito à vista\n💳 Parcelado: +10% acréscimo\n💵 *DINHEIRO: -10% DESCONTO*`;
+            const message = `*NOVA SOLICITACAO DE AGENDAMENTO*\n\n- Cliente: ${clientName}\n- Servico: ${selectedProcedure.name}\n- Data: ${format(startTime, "dd/MM (EEEE)", { locale: ptBR })}\n- Horario: ${selectedTime}${paymentTerms}\n\nGerenciar solicitações: ${manageLink}`;
+            const url = `https://wa.me/${OWNER_PHONE}?text=${encodeURIComponent(message)}`;
+
+            // Redirecionar para WhatsApp
+            window.location.href = url;
 
         } catch (err) {
             alert('Erro ao agendar. Tente novamente.');

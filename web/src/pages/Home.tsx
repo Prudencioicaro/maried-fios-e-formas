@@ -43,7 +43,7 @@ const CATEGORIES = [
         description: 'Redução de volume e alinhamento',
         category: 'Botox',
         minPrice: 150,
-        image: 'https://images.unsplash.com/photo-1519699047748-de8e457a634e?w=800&q=80',
+        image: '/botox-treatment.png',
         gradient: 'from-purple-500/20 to-transparent'
     },
     {
